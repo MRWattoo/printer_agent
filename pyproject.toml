@@ -1,0 +1,27 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "printer-app"
+version = "1.0.0"
+description = "Web-based manager for IP ESC/POS receipt printers with continuous job polling"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = [
+    "flask>=3.0",
+    "requests>=2.31",
+    "Pillow>=10.0",
+    "python-escpos>=3.1",
+]
+
+[project.scripts]
+printer-app = "printer_app.app:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["printer_app"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"printer_app/templates" = "printer_app/templates"
+"printer_app/static"    = "printer_app/static"

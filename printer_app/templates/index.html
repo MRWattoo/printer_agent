@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Printer Manager</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f0f2f5;
+      color: #1a1a2e;
+      min-height: 100vh;
+    }
+
+    header {
+      background: #16213e;
+      color: #fff;
+      padding: 1rem 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    header h1 { font-size: 1.3rem; letter-spacing: .05em; }
+    
+    .header-right { display: flex; align-items: center; gap: 1rem; }
+    .user-info { font-size: 0.9rem; color: #cdd6f4; }
+    .nav-links a { color: #fff; text-decoration: none; font-size: 0.9rem; margin-left: 1rem; }
+    .nav-links a:hover { text-decoration: underline; }
+
+    header a.btn-add {
+      background: #0f3460;
+      color: #e94560;
+      border: 2px solid #e94560;
+      padding: .45rem 1.1rem;
+      border-radius: 6px;
+      text-decoration: none;
+      font-weight: 600;
+      transition: background .2s;
+    }
+    header a.btn-add:hover { background: #e94560; color: #fff; }
+
+    main { max-width: 1100px; margin: 2rem auto; padding: 0 1rem; }
+
+    .card {
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 2px 8px rgba(0,0,0,.08);
+      overflow: hidden;
+    }
+
+    table { width: 100%; border-collapse: collapse; }
+    thead { background: #16213e; color: #cdd6f4; }
+    thead th { padding: .85rem 1rem; text-align: left; font-size: .82rem; text-transform: uppercase; letter-spacing: .07em; }
+    tbody tr { border-bottom: 1px solid #e8eaf0; transition: background .15s; }
+    tbody tr:last-child { border-bottom: none; }
+    tbody tr:hover { background: #f7f8fc; }
+    td { padding: .8rem 1rem; font-size: .9rem; vertical-align: middle; }
+
+    .badge {
+      display: inline-block;
+      padding: .25rem .65rem;
+      border-radius: 20px;
+      font-size: .75rem;
+      font-weight: 600;
+    }
+    .badge-running  { background: #d1fadf; color: #166534; }
+    .badge-stopped  { background: #fee2e2; color: #991b1b; }
+    .badge-disabled { background: #e5e7eb; color: #6b7280; }
+
+    .actions { display: flex; gap: .5rem; flex-wrap: wrap; }
+    .btn {
+      padding: .35rem .8rem;
+      border-radius: 5px;
+      font-size: .8rem;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      text-decoration: none;
+      display: inline-block;
+      transition: opacity .15s;
+    }
+    .btn:hover { opacity: .82; }
+    .btn-edit    { background: #dbeafe; color: #1d4ed8; }
+    .btn-toggle  { background: #fef9c3; color: #854d0e; }
+    .btn-delete  { background: #fee2e2; color: #b91c1c; }
+
+    .empty {
+      text-align: center;
+      padding: 3rem;
+      color: #9ca3af;
+    }
+
+    footer { text-align: center; margin: 2rem 0; color: #9ca3af; font-size: .8rem; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>&#128438; Printer Manager</h1>
+  <div class="header-right">
+    <span class="user-info">Logged in as: <strong>{{ username }}</strong> ({{ role }})</span>
+    <nav class="nav-links">
+      {% if role == 'admin' %}
+        <a href="{{ url_for('users_management') }}">Manage Users</a>
+      {% endif %}
+      <a href="{{ url_for('logout') }}">Logout</a>
+    </nav>
+    <a href="{{ url_for('add_printer') }}" class="btn-add">+ Add Printer</a>
+  </div>
+</header>
+
+<main>
+  <div class="card">
+    {% if printers %}
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Name</th>
+          <th>IP Address</th>
+          <th>Source URL</th>
+          <th>Company</th>
+          <th>Status</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="printer-rows">
+        {% for p in printers %}
+        <tr id="row-{{ p.id }}">
+          <td>{{ p.id }}</td>
+          <td><strong>{{ p.name }}</strong></td>
+          <td><code>{{ p.ip }}</code></td>
+          <td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="{{ p.odoo_url }}">
+            {{ p.odoo_url }}
+          </td>
+          <td>{{ p.company_id }}</td>
+          <td>
+            {% if not p.enabled %}
+              <span class="badge badge-disabled">Disabled</span>
+            {% elif statuses[p.id] %}
+              <span class="badge badge-running">Running</span>
+            {% else %}
+              <span class="badge badge-stopped">Stopped</span>
+            {% endif %}
+          </td>
+          <td>
+            <div class="actions">
+              {% if role == 'admin' %}
+                <a href="{{ url_for('edit_printer', printer_id=p.id) }}" class="btn btn-edit">Edit</a>
+              {% endif %}
+              
+              <form method="post" action="{{ url_for('toggle_printer', printer_id=p.id) }}" style="display:inline">
+                <button type="submit" class="btn btn-toggle">
+                  {{ 'Disable' if p.enabled else 'Enable' }}
+                </button>
+              </form>
+              
+              {% if role == 'admin' %}
+                <form method="post" action="{{ url_for('delete_printer', printer_id=p.id) }}"
+                      onsubmit="return confirm('Delete printer {{ p.name }}?')" style="display:inline">
+                  <button type="submit" class="btn btn-delete">Delete</button>
+                </form>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="empty">
+      <p>No printers configured yet.</p>
+      <p style="margin-top:.5rem"><a href="{{ url_for('add_printer') }}">Add your first printer</a></p>
+    </div>
+    {% endif %}
+  </div>
+</main>
+
+<footer>Printer Application &mdash; auto-refreshes status every 5 seconds</footer>
+
+<script>
+  async function refreshStatus() {
+    try {
+      const res = await fetch('/api/status');
+      if (res.status === 401 || res.redirected) {
+          window.location.reload(); // Redirect to login if session expired
+          return;
+      }
+      const data = await res.json();
+      data.forEach(p => {
+        const row = document.getElementById('row-' + p.id);
+        if (!row) return;
+        const badgeCell = row.querySelector('td:nth-child(6)');
+        if (!badgeCell) return;
+        let html;
+        if (!p.enabled) {
+          html = '<span class="badge badge-disabled">Disabled</span>';
+        } else if (p.running) {
+          html = '<span class="badge badge-running">Running</span>';
+        } else {
+          html = '<span class="badge badge-stopped">Stopped</span>';
+        }
+        badgeCell.innerHTML = html;
+      });
+    } catch(e) { /* silently ignore */ }
+  }
+  setInterval(refreshStatus, 5000);
+</script>
+
+</body>
+</html>

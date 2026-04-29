@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{{ title }} — Printer Manager</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f0f2f5;
+      color: #1a1a2e;
+      min-height: 100vh;
+    }
+
+    header {
+      background: #16213e;
+      color: #fff;
+      padding: 1rem 2rem;
+    }
+    header h1 { font-size: 1.3rem; }
+
+    main { max-width: 560px; margin: 2.5rem auto; padding: 0 1rem; }
+
+    .card {
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 2px 8px rgba(0,0,0,.08);
+      padding: 2rem;
+    }
+    .card h2 { margin-bottom: 1.5rem; font-size: 1.15rem; color: #16213e; }
+
+    label {
+      display: block;
+      font-size: .82rem;
+      font-weight: 600;
+      color: #374151;
+      margin-bottom: .3rem;
+    }
+
+    input[type=text], input[type=number] {
+      width: 100%;
+      padding: .55rem .8rem;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      font-size: .92rem;
+      margin-bottom: 1.1rem;
+      transition: border-color .2s;
+    }
+    input:focus { outline: none; border-color: #0f3460; }
+
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      gap: .75rem;
+      margin-bottom: 1.5rem;
+    }
+    .toggle-row label { margin: 0; }
+
+    .btn-row {
+      display: flex;
+      gap: .75rem;
+    }
+    button[type=submit] {
+      background: #0f3460;
+      color: #fff;
+      border: none;
+      padding: .6rem 1.5rem;
+      border-radius: 6px;
+      font-size: .92rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background .2s;
+    }
+    button[type=submit]:hover { background: #16213e; }
+    a.btn-cancel {
+      background: #e5e7eb;
+      color: #374151;
+      padding: .6rem 1.2rem;
+      border-radius: 6px;
+      font-size: .92rem;
+      font-weight: 600;
+      text-decoration: none;
+      transition: background .2s;
+    }
+    a.btn-cancel:hover { background: #d1d5db; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>&#128438; Printer Manager — {{ title }}</h1>
+</header>
+
+<main>
+  <div class="card">
+    <h2>{{ title }}</h2>
+    <form method="post">
+
+      <label for="name">Printer Name</label>
+      <input type="text" id="name" name="name" required
+             placeholder="e.g. Counter-1 Receipt"
+             value="{{ printer.name if printer else '' }}" />
+
+      <label for="ip">Printer IP Address</label>
+      <input type="text" id="ip" name="ip" required
+             placeholder="e.g. 192.168.0.101"
+             value="{{ printer.ip if printer else '' }}" />
+
+      <label for="odoo_url">Source URL (Odoo / API base URL)</label>
+      <input type="text" id="odoo_url" name="odoo_url" required
+             placeholder="e.g. https://your-odoo.example.com"
+             value="{{ printer.odoo_url if printer else '' }}" />
+
+      <label for="api_key">Access Token / API Key</label>
+      <input type="text" id="api_key" name="api_key" required
+             placeholder="Bearer token or API key"
+             value="{{ printer.api_key if printer else '' }}" />
+
+      <label for="company_id">Company ID</label>
+      <input type="number" id="company_id" name="company_id" required
+             placeholder="1"
+             min="1"
+             value="{{ printer.company_id if printer else 1 }}" />
+
+      {% if printer %}
+      <div class="toggle-row">
+        <input type="checkbox" id="enabled" name="enabled" value="1"
+               {{ 'checked' if printer.enabled else '' }}>
+        <label for="enabled">Enabled (polling active)</label>
+      </div>
+      {% else %}
+      <input type="hidden" name="enabled" value="1" />
+      {% endif %}
+
+      <div class="btn-row">
+        <button type="submit">Save</button>
+        <a href="{{ url_for('index') }}" class="btn-cancel">Cancel</a>
+      </div>
+    </form>
+  </div>
+</main>
+
+</body>
+</html>
