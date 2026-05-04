@@ -4,7 +4,7 @@
 #
 # Usage:
 #   # Fresh install (pulls latest from GitHub):
-#   bash <(curl -fsSL https://raw.githubusercontent.com/MRWattoo/printer_agent/main/install.sh)
+#   curl -fsSL https://raw.githubusercontent.com/MRWattoo/printer_agent/main/install.sh | sudo bash
 #
 #   # Or after cloning:
 #   sudo bash install.sh
@@ -46,7 +46,17 @@ ok()   { echo "[OK]    $*"; }
 err()  { echo "[ERROR] $*" >&2; exit 1; }
 
 require_root() {
-    [[ $EUID -eq 0 ]] || err "This script must be run as root:  sudo bash install.sh"
+    if [[ $EUID -ne 0 ]]; then
+        # If script is a real file on disk, re-exec with sudo automatically
+        if [[ -f "$0" ]]; then
+            info "Not running as root — re-executing with sudo..."
+            exec sudo bash "$0" "$@"
+        fi
+        # Piped case: cannot re-exec, give clear instructions
+        err "This script must be run as root.
+  From a file  : sudo bash install.sh
+  Via curl     : curl -fsSL https://raw.githubusercontent.com/${GITHUB_REPO}/main/install.sh | sudo bash"
+    fi
 }
 
 # --------------------------------------------------------------------------- #
@@ -225,7 +235,7 @@ enable_services() {
 # Main
 # --------------------------------------------------------------------------- #
 main() {
-    require_root
+    require_root "$@"
 
     echo "================================================"
     echo "  Printer Application Installer"
@@ -251,7 +261,7 @@ main() {
     echo "  Web UI          : http://$(hostname -I | awk '{print $1}'):5000"
     echo ""
     echo "  Manual update   : sudo ${SRC_DIR}/update.sh"
-    echo "  Uninstall       : sudo bash install.sh --uninstall"
+    echo "  Uninstall       : curl -fsSL https://raw.githubusercontent.com/${GITHUB_REPO}/main/install.sh | sudo bash -s -- --uninstall"
     echo "================================================"
 }
 
@@ -259,7 +269,7 @@ main() {
 # Uninstall
 # --------------------------------------------------------------------------- #
 uninstall() {
-    require_root
+    require_root "$@"
 
     info "Stopping services..."
     systemctl stop  "$SERVICE_NAME"                   2>/dev/null || true
@@ -292,6 +302,6 @@ uninstall() {
 # Entry point
 # --------------------------------------------------------------------------- #
 case "${1:-}" in
-    --uninstall) uninstall ;;
-    *)           main      ;;
+    --uninstall) uninstall "$@" ;;
+    *)           main      "$@" ;;
 esac
