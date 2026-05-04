@@ -43,6 +43,8 @@
       border-radius: 4px;
     }
     .btn {
+      text-decoration: none;
+      display: inline-block;
       padding: .5rem 1rem;
       border-radius: 4px;
       border: none;
@@ -52,6 +54,7 @@
     }
     .btn-primary { background: #0f3460; color: #fff; }
     .btn-danger { background: #fee2e2; color: #b91c1c; }
+    .btn-warning { background: #fef9c3; color: #854d0e; }
     .error { color: #b91c1c; font-size: .85rem; margin-bottom: 1rem; }
   </style>
 </head>
@@ -60,10 +63,20 @@
   <h1>User Management</h1>
   <nav>
     <a href="{{ url_for('index') }}">Back to Printers</a>
+    <a href="{{ url_for('change_own_password') }}">Change Password</a>
     <a href="{{ url_for('logout') }}">Logout</a>
   </nav>
 </header>
 <main>
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      {% for category, message in messages %}
+        <div style="padding: 1rem; margin-bottom: 1rem; border-radius: 6px; background: {% if category == 'success' %}#d1fae5; color: #047857{% else %}#fee2e2; color: #b91c1c{% endif %}; text-align: center; font-weight: 500;">
+          {{ message }}
+        </div>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
   <div class="card">
     <h2>Add New User</h2>
     {% if error %}
@@ -106,6 +119,7 @@
           <td>{{ u.role }}</td>
           <td>
             {% if u.username != 'wattoo' %}
+            <a href="{{ url_for('admin_change_password', user_id=u.id) }}" class="btn btn-warning">Change Password</a>
             <form method="post" action="{{ url_for('delete_user', user_id=u.id) }}" onsubmit="return confirm('Delete user {{ u.username }}?')">
               <button type="submit" class="btn btn-danger">Delete</button>
             </form>

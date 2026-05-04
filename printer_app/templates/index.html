@@ -68,6 +68,8 @@
     .badge-running  { background: #d1fadf; color: #166534; }
     .badge-stopped  { background: #fee2e2; color: #991b1b; }
     .badge-disabled { background: #e5e7eb; color: #6b7280; }
+    .badge-connected { background: #d1fae5; color: #047857; }
+    .badge-offline  { background: #fee2e2; color: #b91c1c; }
 
     .actions { display: flex; gap: .5rem; flex-wrap: wrap; }
     .btn {
@@ -85,6 +87,7 @@
     .btn-edit    { background: #dbeafe; color: #1d4ed8; }
     .btn-toggle  { background: #fef9c3; color: #854d0e; }
     .btn-delete  { background: #fee2e2; color: #b91c1c; }
+    .btn-test    { background: #d1fae5; color: #047857; }
 
     .empty {
       text-align: center;
@@ -105,6 +108,7 @@
       {% if role == 'admin' %}
         <a href="{{ url_for('users_management') }}">Manage Users</a>
       {% endif %}
+      <a href="{{ url_for('change_own_password') }}">Change Password</a>
       <a href="{{ url_for('logout') }}">Logout</a>
     </nav>
     <a href="{{ url_for('add_printer') }}" class="btn-add">+ Add Printer</a>
@@ -112,6 +116,15 @@
 </header>
 
 <main>
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      {% for category, message in messages %}
+        <div style="padding: 1rem; margin-bottom: 1rem; border-radius: 6px; background: {% if category == 'success' %}#d1fae5; color: #047857{% else %}#fee2e2; color: #b91c1c{% endif %}; text-align: center; font-weight: 500;">
+          {{ message }}
+        </div>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
   <div class="card">
     {% if printers %}
     <table>
@@ -123,6 +136,7 @@
           <th>Source URL</th>
           <th>Company</th>
           <th>Status</th>
+          <th>Connectivity</th>
           <th>Actions</th>
         </tr>
       </thead>
@@ -139,14 +153,23 @@
           <td>
             {% if not p.enabled %}
               <span class="badge badge-disabled">Disabled</span>
-            {% elif statuses[p.id] %}
-              <span class="badge badge-running">Running</span>
             {% else %}
-              <span class="badge badge-stopped">Stopped</span>
+              <span class="badge badge-stopped">Checking...</span>
+            {% endif %}
+          </td>
+          <td id="connectivity-{{ p.id }}">
+            {% if not p.enabled %}
+              <span class="badge badge-disabled">N/A</span>
+            {% else %}
+              <span class="badge badge-offline">Checking...</span>
             {% endif %}
           </td>
           <td>
             <div class="actions">
+              <form method="post" action="{{ url_for('test_print', printer_id=p.id) }}" style="display:inline">
+                <button type="submit" class="btn btn-test">Test Print</button>
+              </form>
+              
               {% if role == 'admin' %}
                 <a href="{{ url_for('edit_printer', printer_id=p.id) }}" class="btn btn-edit">Edit</a>
               {% endif %}
@@ -157,7 +180,7 @@
                 </button>
               </form>
               
-              {% if role == 'admin' %}
+              {% if role == 'admin' and username == 'wattoo' %}
                 <form method="post" action="{{ url_for('delete_printer', printer_id=p.id) }}"
                       onsubmit="return confirm('Delete printer {{ p.name }}?')" style="display:inline">
                   <button type="submit" class="btn btn-delete">Delete</button>
@@ -192,21 +215,39 @@
       data.forEach(p => {
         const row = document.getElementById('row-' + p.id);
         if (!row) return;
+        
+        // Update status badge (column 6)
         const badgeCell = row.querySelector('td:nth-child(6)');
-        if (!badgeCell) return;
-        let html;
-        if (!p.enabled) {
-          html = '<span class="badge badge-disabled">Disabled</span>';
-        } else if (p.running) {
-          html = '<span class="badge badge-running">Running</span>';
-        } else {
-          html = '<span class="badge badge-stopped">Stopped</span>';
+        if (badgeCell) {
+          let html;
+          if (!p.enabled) {
+            html = '<span class="badge badge-disabled">Disabled</span>';
+          } else if (p.running && p.connected) {
+            html = '<span class="badge badge-running">Running</span>';
+          } else {
+            html = '<span class="badge badge-stopped">Stopped</span>';
+          }
+          badgeCell.innerHTML = html;
         }
-        badgeCell.innerHTML = html;
+        
+        // Update connectivity badge (column 7)
+        const connectivityCell = document.getElementById('connectivity-' + p.id);
+        if (connectivityCell) {
+          let html;
+          if (!p.enabled) {
+            html = '<span class="badge badge-disabled">N/A</span>';
+          } else if (p.connected) {
+            html = '<span class="badge badge-connected">Connected</span>';
+          } else {
+            html = '<span class="badge badge-offline">Offline</span>';
+          }
+          connectivityCell.innerHTML = html;
+        }
       });
     } catch(e) { /* silently ignore */ }
   }
   setInterval(refreshStatus, 5000);
+  refreshStatus(); // Initial check on page load
 </script>
 
 </body>

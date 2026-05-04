@@ -12,13 +12,14 @@ Job confirmation policy:
 """
 
 import base64
+import datetime
 import logging
 import socket
 import threading
 from io import BytesIO
 
 import requests
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 
 try:
     from escpos.printer import Network
@@ -62,6 +63,94 @@ def imgcrop(im: Image.Image):
 # ---------------------------------------------------------------------------
 # Printing
 # ---------------------------------------------------------------------------
+
+def generate_test_receipt() -> str:
+    """
+    Generate a simple test receipt image and return it as base64 string.
+    """
+    # Create a simple receipt image
+    width = 400
+    height = 300
+    
+    # Create image with white background
+    img = Image.new('RGB', (width, height), color='white')
+    draw = ImageDraw.Draw(img)
+    
+    # Try to use a default font, fall back to default if not available
+    try:
+        font_large = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 24)
+        font_small = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 16)
+    except:
+        font_large = ImageFont.load_default()
+        font_small = ImageFont.load_default()
+    
+    # Draw test receipt content
+    y_offset = 20
+    
+    # Title
+    draw.text((width//2, y_offset), "TEST PRINT", fill='black', anchor='mt', font=font_large)
+    y_offset += 50
+    
+    # Separator line
+    draw.line([(20, y_offset), (width-20, y_offset)], fill='black', width=2)
+    y_offset += 30
+    
+    # Test information
+    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    draw.text((30, y_offset), f"Date: {timestamp}", fill='black', font=font_small)
+    y_offset += 30
+    
+    draw.text((30, y_offset), "Printer Test", fill='black', font=font_small)
+    y_offset += 30
+    
+    draw.text((30, y_offset), "Status: OK", fill='black', font=font_small)
+    y_offset += 30
+    
+    # Separator line
+    draw.line([(20, y_offset), (width-20, y_offset)], fill='black', width=2)
+    y_offset += 30
+    
+    draw.text((width//2, y_offset), "End of Test", fill='black', anchor='mt', font=font_small)
+    
+    # Convert to base64
+    buffer = BytesIO()
+    img.save(buffer, format='PNG')
+    img_str = base64.b64encode(buffer.getvalue()).decode('utf-8')
+    
+    return img_str
+
+
+def check_printer_connectivity(printer_ip: str) -> bool:
+    """
+    Check if the printer is reachable and online.
+    Returns True if connected, False otherwise.
+    """
+    if not ESCPOS_AVAILABLE:
+        return False
+    
+    try:
+        printer = Network(printer_ip, timeout=5)
+        is_online = printer.is_online()
+        printer.close()
+        return is_online
+    except (socket.timeout, socket.error, OSError):
+        return False
+    except Exception:
+        return False
+
+
+def print_test(printer_ip: str) -> None:
+    """
+    Generate and print a test receipt.
+    
+    Raises:
+        PrinterNotReachableError  – printer did not respond / timed out.
+        PrinterHardwareError      – printer returned an error status (paper out, etc.).
+        Exception                 – any other unexpected failure.
+    """
+    test_img_data = generate_test_receipt()
+    print_receipt(printer_ip, test_img_data)
+
 
 def print_receipt(printer_ip: str, img_data: str) -> None:
     """

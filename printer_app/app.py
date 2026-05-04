@@ -12,7 +12,7 @@ from functools import wraps
 from flask import Flask, render_template, request, redirect, url_for, jsonify, session, flash
 from werkzeug.security import generate_password_hash, check_password_hash
 
-from .print_agent import agent_manager
+from .print_agent import agent_manager, print_test, PrinterNotReachableError, PrinterHardwareError, check_printer_connectivity
 
 logging.basicConfig(
     level=logging.INFO,
@@ -195,6 +195,65 @@ def delete_user(user_id: int):
             conn.commit()
     return redirect(url_for("users_management"))
 
+
+@app.route("/users/change_password/<int:user_id>", methods=["GET", "POST"])
+@login_required
+@admin_required
+def admin_change_password(user_id: int):
+    with get_db() as conn:
+        user = conn.execute("SELECT * FROM users WHERE id=?", (user_id,)).fetchone()
+    
+    if not user:
+        return "User not found", 404
+    
+    if request.method == "POST":
+        new_password = request.form.get("password")
+        if not new_password:
+            return render_template("change_password.html", user=row_to_dict(user), error="Password is required")
+        
+        with get_db() as conn:
+            conn.execute(
+                "UPDATE users SET password_hash=? WHERE id=?",
+                (generate_password_hash(new_password), user_id)
+            )
+            conn.commit()
+        
+        flash(f"Password changed for user {user['username']}", "success")
+        return redirect(url_for("users_management"))
+    
+    return render_template("change_password.html", user=row_to_dict(user))
+
+
+@app.route("/change_password", methods=["GET", "POST"])
+@login_required
+def change_own_password():
+    user_id = session.get('user_id')
+    
+    if request.method == "POST":
+        current_password = request.form.get("current_password")
+        new_password = request.form.get("new_password")
+        
+        if not current_password or not new_password:
+            return render_template("change_password.html", error="All fields are required", own_password=True)
+        
+        with get_db() as conn:
+            user = conn.execute("SELECT * FROM users WHERE id=?", (user_id,)).fetchone()
+        
+        if not user or not check_password_hash(user["password_hash"], current_password):
+            return render_template("change_password.html", error="Current password is incorrect", own_password=True)
+        
+        with get_db() as conn:
+            conn.execute(
+                "UPDATE users SET password_hash=? WHERE id=?",
+                (generate_password_hash(new_password), user_id)
+            )
+            conn.commit()
+        
+        flash("Your password has been changed successfully", "success")
+        return redirect(url_for("index"))
+    
+    return render_template("change_password.html", own_password=True)
+
 def get_all_users():
     with get_db() as conn:
         return conn.execute("SELECT id, username, role FROM users").fetchall()
@@ -292,7 +351,11 @@ def edit_printer(printer_id: int):
 @login_required
 @admin_required
 def delete_printer(printer_id: int):
-    # Only Admin can delete printers
+    # Only main admin (wattoo) can delete printers
+    if session.get('username') != 'wattoo':
+        flash("Only the main admin can delete printers", "error")
+        return redirect(url_for("index"))
+    
     agent_manager.stop(printer_id)
     with get_db() as conn:
         conn.execute("DELETE FROM printers WHERE id=?", (printer_id,))
@@ -322,6 +385,27 @@ def toggle_printer(printer_id: int):
     return redirect(url_for("index"))
 
 
+@app.route("/test_print/<int:printer_id>", methods=["POST"])
+@login_required
+def test_print(printer_id: int):
+    # Both Admin and User can send test prints
+    printer = get_printer(printer_id)
+    if not printer:
+        return jsonify({"error": "not found"}), 404
+
+    try:
+        print_test(printer["ip"])
+        flash(f"Test print sent successfully to {printer['name']}", "success")
+    except PrinterNotReachableError as e:
+        flash(f"Test print failed - printer not reachable: {e}", "error")
+    except PrinterHardwareError as e:
+        flash(f"Test print failed - hardware error: {e}", "error")
+    except Exception as e:
+        flash(f"Test print failed - unexpected error: {e}", "error")
+
+    return redirect(url_for("index"))
+
+
 # ---------------------------------------------------------------------------
 # API — status endpoint
 # ---------------------------------------------------------------------------
@@ -338,6 +422,7 @@ def api_status():
                 "ip": p["ip"],
                 "enabled": bool(p["enabled"]),
                 "running": agent_manager.is_alive(p["id"]),
+                "connected": check_printer_connectivity(p["ip"]) if p["enabled"] else False,
             }
             for p in printers
         ]
