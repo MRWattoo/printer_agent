@@ -223,7 +223,8 @@ def admin_change_password(user_id: int):
         flash("Only the system user can change their own password.", "error")
         return redirect(url_for("users_management"))
 
-    if request.method == "POST":        new_password = request.form.get("password")
+    if request.method == "POST":
+        new_password = request.form.get("password")
         if not new_password:
             return render_template("change_password.html", user=row_to_dict(user), error="Password is required")
         
