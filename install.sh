@@ -15,8 +15,8 @@
 # What it does:
 #   1. Installs system dependencies (python3-venv, git, libusb, libjpeg)
 #   2. Creates a dedicated system user 'printer-app'
-#   3. Clones the repo to /opt/printer_application_src
-#   4. Installs the package into /opt/printer_app_venv
+#   3. Clones the repo to /opt/printer_application
+#   4. Installs the package into /opt/printer_application/.venv
 #   5. Creates data directory /var/lib/printer_app
 #   6. Installs and enables the printer-app systemd service
 #   7. Installs a daily auto-update systemd timer
@@ -31,8 +31,9 @@ GITHUB_REPO="MRWattoo/printer_agent"
 GITHUB_BRANCH="main"
 
 APP_USER="printer-app"
-SRC_DIR="/opt/printer_application_src"
-VENV_DIR="/opt/printer_app_venv"
+BASE_DIR="/opt/printer_application"
+SRC_DIR="$BASE_DIR"
+VENV_DIR="$BASE_DIR/.venv"
 DATA_DIR="/var/lib/printer_app"
 SERVICE_NAME="printer-app"
 UPDATE_SERVICE_NAME="printer-app-update"

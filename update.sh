@@ -4,14 +4,15 @@
 #
 # Called automatically by the printer-app-update systemd timer (daily 03:00).
 # Can also be run manually:
-#   sudo /opt/printer_application_src/update.sh
+#   sudo /opt/printer_application/update.sh
 # =============================================================================
 
 set -euo pipefail
 
 GITHUB_BRANCH="main"
-SRC_DIR="/opt/printer_application_src"
-VENV_DIR="/opt/printer_app_venv"
+BASE_DIR="/opt/printer_application"
+SRC_DIR="$BASE_DIR"
+VENV_DIR="$BASE_DIR/.venv"
 SERVICE_NAME="printer-app"
 
 info() { echo "[INFO]  $*"; }

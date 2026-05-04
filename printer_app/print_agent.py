@@ -220,7 +220,10 @@ def print_receipt(printer_ip: str, img_data: str) -> None:
     try:
         for img in imgs:
             printer.image(img)
-        printer.cut()
+        # Add feed lines before cut to ensure clean cutting
+        printer._raw(b'\n\n\n')
+        # Ensure all data is sent before cutting
+        printer.cut(mode='full')
     except (socket.timeout, socket.error, OSError) as exc:
         # Network disappeared mid-print (e.g. printer powered off or paper jam
         # caused the printer to close the connection).

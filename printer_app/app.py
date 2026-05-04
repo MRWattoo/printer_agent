@@ -94,23 +94,29 @@ def init_db():
             CREATE TABLE IF NOT EXISTS users (
                 id            INTEGER PRIMARY KEY AUTOINCREMENT,
                 username      TEXT    NOT NULL UNIQUE,
+                name          TEXT,
                 password_hash TEXT    NOT NULL,
                 role          TEXT    NOT NULL DEFAULT 'user'
             )
             """
         )
-        
+
+        # Migration: Add name column if it doesn't exist
+        try:
+            conn.execute("ALTER TABLE users ADD COLUMN name TEXT")
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+
         # Seed default admin
         admin = conn.execute("SELECT * FROM users WHERE username='wattoo'").fetchone()
         if not admin:
             # Password: 3r6&&$u63r!or##
             hashed = generate_password_hash("3r6&&$u63r!or##")
             conn.execute(
-                "INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)",
-                ("wattoo", hashed, "admin")
+                "INSERT INTO users (username, name, password_hash, role) VALUES (?, ?, ?, ?)",
+                ("wattoo", "Main Admin", hashed, "admin")
             )
-        conn.commit()
-
+            conn.commit()
 
 def row_to_dict(row) -> dict:
     return dict(row)
@@ -144,6 +150,7 @@ def login():
         if user and check_password_hash(user["password_hash"], password):
             session["user_id"] = user["id"]
             session["username"] = user["username"]
+            session["name"] = user["name"]
             session["role"] = user["role"]
             return redirect(url_for("index"))
         
@@ -164,22 +171,22 @@ def logout():
 def users_management():
     if request.method == "POST":
         username = request.form.get("username").strip()
+        name = request.form.get("name", "").strip()
         password = request.form.get("password")
         role = request.form.get("role", "user")
-        
+
         if not username or not password:
             return render_template("users.html", error="Username and password required", users=get_all_users())
-            
+
         try:
             with get_db() as conn:
                 conn.execute(
-                    "INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)",
-                    (username, generate_password_hash(password), role)
+                    "INSERT INTO users (username, name, password_hash, role) VALUES (?, ?, ?, ?)",
+                    (username, name, generate_password_hash(password), role)
                 )
                 conn.commit()
         except sqlite3.IntegrityError:
-            return render_template("users.html", error="Username already exists", users=get_all_users())
-            
+            return render_template("users.html", error="Username already exists", users=get_all_users())            
         return redirect(url_for("users_management"))
 
     return render_template("users.html", users=get_all_users())
@@ -190,9 +197,13 @@ def users_management():
 def delete_user(user_id: int):
     with get_db() as conn:
         user = conn.execute("SELECT username FROM users WHERE id=?", (user_id,)).fetchone()
-        if user and user["username"] != "wattoo":
-            conn.execute("DELETE FROM users WHERE id=?", (user_id,))
-            conn.commit()
+        if user:
+            if user["username"] == "wattoo":
+                flash("Default user 'wattoo' cannot be deleted.", "error")
+            else:
+                conn.execute("DELETE FROM users WHERE id=?", (user_id,))
+                conn.commit()
+                flash(f"User '{user['username']}' deleted.", "success")
     return redirect(url_for("users_management"))
 
 
@@ -256,7 +267,7 @@ def change_own_password():
 
 def get_all_users():
     with get_db() as conn:
-        return conn.execute("SELECT id, username, role FROM users").fetchall()
+        return conn.execute("SELECT id, username, name, role FROM users").fetchall()
 
 
 # ---------------------------------------------------------------------------
@@ -268,12 +279,12 @@ def get_all_users():
 def index():
     printers = get_all_printers()
     statuses = {p["id"]: agent_manager.is_alive(p["id"]) for p in printers}
-    return render_template("index.html", 
-                           printers=printers, 
-                           statuses=statuses, 
+    return render_template("index.html",
+                           printers=printers,
+                           statuses=statuses,
                            role=session.get('role'),
-                           username=session.get('username'))
-
+                           username=session.get('username'),
+                           display_name=session.get('name') or session.get('username'))
 
 @app.route("/add", methods=["GET", "POST"])
 @login_required

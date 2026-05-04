@@ -71,7 +71,7 @@
     .badge-connected { background: #d1fae5; color: #047857; }
     .badge-offline  { background: #fee2e2; color: #b91c1c; }
 
-    .actions { display: flex; gap: .5rem; flex-wrap: wrap; }
+    .actions { display: flex; gap: .5rem; }
     .btn {
       padding: .35rem .8rem;
       border-radius: 5px;
@@ -103,7 +103,7 @@
 <header>
   <h1>&#128438; Printer Manager</h1>
   <div class="header-right">
-    <span class="user-info">Logged in as: <strong>{{ username }}</strong> ({{ role }})</span>
+    <span class="user-info">Logged in as: <strong>{{ display_name }}</strong> ({{ role }})</span>
     <nav class="nav-links">
       {% if role == 'admin' %}
         <a href="{{ url_for('users_management') }}">Manage Users</a>

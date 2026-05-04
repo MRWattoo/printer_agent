@@ -19,8 +19,8 @@ The installer will:
 
 1. Install system packages (`python3-venv`, `git`, `libusb`, `libjpeg`, etc.)
 2. Create a dedicated system user `printer-app`
-3. Clone the repository to `/opt/printer_application_src`
-4. Install the package into `/opt/printer_app_venv`
+3. Clone the repository to `/opt/printer_application`
+4. Install the package into `/opt/printer_application/.venv`
 5. Create data directory `/var/lib/printer_app` (SQLite DB lives here)
 6. Install and start the `printer-app` systemd service
 7. Install a **daily auto-update timer** (`printer-app-update.timer`) that pulls the latest version from GitHub every night at 03:00 and restarts the service automatically
@@ -41,7 +41,7 @@ sudo systemctl status printer-app-update.timer
 sudo journalctl -u printer-app-update
 
 # Trigger a manual update at any time
-sudo /opt/printer_application_src/update.sh
+sudo /opt/printer_application/update.sh
 ```
 
 The update script:
@@ -64,7 +64,7 @@ sudo systemctl restart printer-app       # manual restart
 ## Uninstall
 
 ```bash
-sudo bash /opt/printer_application_src/install.sh --uninstall
+sudo bash /opt/printer_application/install.sh --uninstall
 ```
 
 Removes the service, timer, venv, source clone, data directory, and system user.

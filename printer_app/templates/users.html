@@ -55,6 +55,8 @@
     .btn-primary { background: #0f3460; color: #fff; }
     .btn-danger { background: #fee2e2; color: #b91c1c; }
     .btn-warning { background: #fef9c3; color: #854d0e; }
+    .actions { display: flex; gap: .5rem; }
+    .actions form { display: inline; }
     .error { color: #b91c1c; font-size: .85rem; margin-bottom: 1rem; }
   </style>
 </head>
@@ -88,6 +90,10 @@
         <input type="text" id="username" name="username" required>
       </div>
       <div class="form-group">
+        <label for="name">Full Name</label>
+        <input type="text" id="name" name="name" placeholder="e.g. John Doe">
+      </div>
+      <div class="form-group">
         <label for="password">Password</label>
         <input type="password" id="password" name="password" required>
       </div>
@@ -108,6 +114,7 @@
       <thead>
         <tr>
           <th>Username</th>
+          <th>Name</th>
           <th>Role</th>
           <th>Actions</th>
         </tr>
@@ -116,14 +123,20 @@
         {% for u in users %}
         <tr>
           <td>{{ u.username }}</td>
+          <td>{{ u.name or '' }}</td>
           <td>{{ u.role }}</td>
           <td>
-            {% if u.username != 'wattoo' %}
-            <a href="{{ url_for('admin_change_password', user_id=u.id) }}" class="btn btn-warning">Change Password</a>
-            <form method="post" action="{{ url_for('delete_user', user_id=u.id) }}" onsubmit="return confirm('Delete user {{ u.username }}?')">
-              <button type="submit" class="btn btn-danger">Delete</button>
-            </form>
-            {% endif %}
+            <div class="actions">
+              {% if u.username == 'wattoo' %}
+                <span class="badge" style="background: #e5e7eb; color: #4b5563; font-style: italic;">System User</span>
+                <a href="{{ url_for('admin_change_password', user_id=u.id) }}" class="btn btn-warning">Change Password</a>
+              {% else %}
+                <a href="{{ url_for('admin_change_password', user_id=u.id) }}" class="btn btn-warning">Change Password</a>
+                <form method="post" action="{{ url_for('delete_user', user_id=u.id) }}" onsubmit="return confirm('Delete user {{ u.username }}?')">
+                  <button type="submit" class="btn btn-danger">Delete</button>
+                </form>
+              {% endif %}
+            </div>
           </td>
         </tr>
         {% endfor %}

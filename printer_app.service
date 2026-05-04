@@ -5,7 +5,7 @@ After=network.target
 [Service]
 Type=simple
 User=printer-app
-ExecStart=/opt/printer_app_venv/bin/printer-app
+ExecStart=/opt/printer_application/.venv/bin/printer-app
 Restart=always
 RestartSec=5
 Environment=PRINTER_APP_DATA=/var/lib/printer_app
