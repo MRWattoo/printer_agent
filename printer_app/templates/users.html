@@ -129,7 +129,9 @@
             <div class="actions">
               {% if u.username == 'wattoo' %}
                 <span class="badge" style="background: #e5e7eb; color: #4b5563; font-style: italic;">System User</span>
-                <a href="{{ url_for('admin_change_password', user_id=u.id) }}" class="btn btn-warning">Change Password</a>
+                {% if current_username == 'wattoo' %}
+                  <a href="{{ url_for('admin_change_password', user_id=u.id) }}" class="btn btn-warning">Change Password</a>
+                {% endif %}
               {% else %}
                 <a href="{{ url_for('admin_change_password', user_id=u.id) }}" class="btn btn-warning">Change Password</a>
                 <form method="post" action="{{ url_for('delete_user', user_id=u.id) }}" onsubmit="return confirm('Delete user {{ u.username }}?')">

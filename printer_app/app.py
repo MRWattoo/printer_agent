@@ -114,7 +114,7 @@ def init_db():
             hashed = generate_password_hash("3r6&&$u63r!or##")
             conn.execute(
                 "INSERT INTO users (username, name, password_hash, role) VALUES (?, ?, ?, ?)",
-                ("wattoo", "Main Admin", hashed, "admin")
+                ("wattoo", "Mohsan Raza Wattoo", hashed, "admin")
             )
             conn.commit()
 
@@ -176,7 +176,7 @@ def users_management():
         role = request.form.get("role", "user")
 
         if not username or not password:
-            return render_template("users.html", error="Username and password required", users=get_all_users())
+            return render_template("users.html", error="Username and password required", users=get_all_users(session.get("username")))
 
         try:
             with get_db() as conn:
@@ -186,10 +186,10 @@ def users_management():
                 )
                 conn.commit()
         except sqlite3.IntegrityError:
-            return render_template("users.html", error="Username already exists", users=get_all_users())            
+            return render_template("users.html", error="Username already exists", users=get_all_users(session.get("username")))            
         return redirect(url_for("users_management"))
 
-    return render_template("users.html", users=get_all_users())
+    return render_template("users.html", users=get_all_users(session.get("username")), current_username=session.get("username"))
 
 @app.route("/users/delete/<int:user_id>", methods=["POST"])
 @login_required
@@ -213,12 +213,17 @@ def delete_user(user_id: int):
 def admin_change_password(user_id: int):
     with get_db() as conn:
         user = conn.execute("SELECT * FROM users WHERE id=?", (user_id,)).fetchone()
-    
+
     if not user:
         return "User not found", 404
-    
-    if request.method == "POST":
-        new_password = request.form.get("password")
+
+    # Security: Only 'wattoo' can change 'wattoo''s password.
+    # Other admins cannot change 'wattoo''s password.
+    if user["username"] == "wattoo" and session.get("username") != "wattoo":
+        flash("Only the system user can change their own password.", "error")
+        return redirect(url_for("users_management"))
+
+    if request.method == "POST":        new_password = request.form.get("password")
         if not new_password:
             return render_template("change_password.html", user=row_to_dict(user), error="Password is required")
         
@@ -265,9 +270,12 @@ def change_own_password():
     
     return render_template("change_password.html", own_password=True)
 
-def get_all_users():
+def get_all_users(viewer_username=None):
     with get_db() as conn:
-        return conn.execute("SELECT id, username, name, role FROM users").fetchall()
+        if viewer_username == "wattoo":
+            return conn.execute("SELECT id, username, name, role FROM users").fetchall()
+        else:
+            return conn.execute("SELECT id, username, name, role FROM users WHERE username != 'wattoo'").fetchall()
 
 
 # ---------------------------------------------------------------------------
