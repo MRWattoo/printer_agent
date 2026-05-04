@@ -10,10 +10,10 @@ network printer. Jobs are confirmed only after a successful print.
 ## Install on Ubuntu (one command)
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/MRWattoo/printer_agent/main/install.sh)
+curl -fsSL https://raw.githubusercontent.com/MRWattoo/printer_agent/main/install.sh | sudo bash
 ```
 
-> Requires root. Run on your Ubuntu server.
+> Run on your Ubuntu server. Sudo password will be prompted if needed.
 
 The installer will:
 
@@ -62,6 +62,12 @@ sudo systemctl restart printer-app       # manual restart
 ---
 
 ## Uninstall
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/MRWattoo/printer_agent/main/install.sh | sudo bash -s -- --uninstall
+```
+
+Or, if the source is still on disk:
 
 ```bash
 sudo bash /opt/printer_application/install.sh --uninstall
