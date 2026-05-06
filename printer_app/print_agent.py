@@ -120,21 +120,46 @@ def generate_test_receipt() -> str:
     return img_str
 
 
+def _parse_ip_port(ip_str: str) -> tuple[str, int]:
+    """Parse '192.168.1.100:9101' into ('192.168.1.100', 9101)."""
+    if ":" in ip_str:
+        try:
+            ip, port = ip_str.split(":", 1)
+            return ip, int(port)
+        except ValueError:
+            pass
+    return ip_str, 9100
+
+
 def check_printer_connectivity(printer_ip: str) -> bool:
     """
     Check if the printer is reachable and online.
     Returns True if connected, False otherwise.
+    
+    We first try a raw socket connection as it is more robust
+    than ESC/POS status queries which many printers do not support.
     """
+    ip, port = _parse_ip_port(printer_ip)
+
+    # 1. Try raw TCP connection
+    try:
+        s = socket.create_connection((ip, port), timeout=2)
+        s.close()
+        return True
+    except (socket.timeout, socket.error, OSError):
+        pass
+
+    # 2. Fallback to ESC/POS library if available
     if not ESCPOS_AVAILABLE:
         return False
     
     try:
-        printer = Network(printer_ip, timeout=5)
-        is_online = printer.is_online()
+        # Some printers might need a specific handshake performed by the library
+        printer = Network(ip, port=port, timeout=3)
+        # We don't strictly check is_online() here because if the connection 
+        # was established, it's "accessible".
         printer.close()
-        return is_online
-    except (socket.timeout, socket.error, OSError):
-        return False
+        return True
     except Exception:
         return False
 
@@ -170,49 +195,55 @@ def print_receipt(printer_ip: str, img_data: str) -> None:
             f"python-escpos is not installed; cannot print to {printer_ip}"
         )
 
+    ip, port = _parse_ip_port(printer_ip)
     imgs = imgcrop(Image.open(BytesIO(base64.b64decode(img_data))))
 
     # --- connect ---------------------------------------------------------
     try:
-        printer = Network(printer_ip, timeout=10)
+        printer = Network(ip, port=port, timeout=10)
     except (socket.timeout, socket.error, OSError) as exc:
         raise PrinterNotReachableError(
-            f"Cannot connect to printer {printer_ip}: {exc}"
+            f"Cannot connect to printer {ip} on port {port}: {exc}. "
+            "Ensure the printer is powered on and reachable from this server."
         ) from exc
 
-    # --- pre-print status checks -----------------------------------------
+
+    # --- pre-print status checks (Best Effort) ---------------------------
     try:
-        # 1. Online / ready check
-        if not printer.is_online():
-            raise PrinterNotReachableError(
-                f"Printer {printer_ip} is offline or not ready"
-            )
+        # Many printers do not support DLE-EOT status queries over TCP.
+        # We attempt them but don't abort unless we get a CLEAR hardware error.
+        
+        try:
+            # 1. Online / ready check
+            if not printer.is_online():
+                logger.warning("[%s] Printer reported offline status via is_online() — proceeding anyway", printer_ip)
 
-        # 2. Paper / roll check
-        #    paper_status() returns: 2 = adequate, 1 = near-end, 0 = out
-        paper = printer.paper_status()
-        if paper == 0:
-            raise PrinterHardwareError(
-                f"Printer {printer_ip}: paper roll is empty — cannot print"
-            )
-        if paper == 1:
-            raise PrinterHardwareError(
-                f"Printer {printer_ip}: paper roll is near-end — "
-                "replace roll before printing to avoid a partial receipt"
-            )
-    except (PrinterNotReachableError, PrinterHardwareError):
-        raise  # re-raise our own typed errors unchanged
-    except (socket.timeout, socket.error, OSError) as exc:
-        raise PrinterNotReachableError(
-            f"Status query failed for printer {printer_ip}: {exc}"
-        ) from exc
+            # 2. Paper / roll check
+            #    paper_status() returns: 2 = adequate, 1 = near-end, 0 = out
+            paper = printer.paper_status()
+            if paper == 0:
+                raise PrinterHardwareError(
+                    f"Printer {printer_ip}: paper roll is empty — cannot print"
+                )
+            if paper == 1:
+                logger.warning("[%s] Printer paper roll is near-end", printer_ip)
+        except PrinterHardwareError:
+            raise
+        except Exception as status_exc:
+            # If the status query itself fails (timeout, etc.), we assume the 
+            # printer is just "silent" and proceed with the print attempt.
+            logger.debug("[%s] Status query failed (%s) — ignoring", printer_ip, status_exc)
+
+    except PrinterHardwareError:
+        # Re-raise explicit hardware errors (like paper out)
+        try:
+            printer.close()
+        except:
+            pass
+        raise
     except Exception as exc:
-        # Some printers don't support DLE-EOT status queries; if the status
-        # check itself errors we log a warning and attempt to print anyway
-        # rather than blocking all jobs on unsupported hardware.
         logger.warning(
-            "[%s] Status query raised an unexpected error (%s) — "
-            "proceeding with print attempt",
+            "[%s] Unexpected error during status check (%s) — proceeding to print",
             printer_ip, exc,
         )
 
@@ -233,6 +264,12 @@ def print_receipt(printer_ip: str, img_data: str) -> None:
     except Exception as exc:
         # Covers escpos internal errors, status-check errors (paper out, etc.)
         error_msg = str(exc).lower()
+        
+        # Check if this is just a warning that we should ignore
+        if any(low in error_msg for low in ("near", "about to end", "low", "warning", "almost")):
+            logger.warning("[%s] Printer reported a non-fatal warning during print: %s", printer_ip, exc)
+            return  # Treat as success if it reached here after cut/image calls
+
         if any(kw in error_msg for kw in ("paper", "cover", "status", "error", "roll")):
             raise PrinterHardwareError(
                 f"Printer {printer_ip} hardware error: {exc}"
@@ -240,11 +277,13 @@ def print_receipt(printer_ip: str, img_data: str) -> None:
         raise PrinterHardwareError(
             f"Printer {printer_ip} unexpected error: {exc}"
         ) from exc
+
     finally:
         try:
             printer.close()
         except Exception:
             pass  # ignore close errors — the print result is already determined
+
 
 
 # ---------------------------------------------------------------------------
