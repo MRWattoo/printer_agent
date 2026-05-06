@@ -133,55 +133,53 @@ def _parse_ip_port(ip_str: str) -> tuple[str, int]:
 
 def check_printer_connectivity(printer_ip: str) -> bool:
     """
-    Check if the printer is reachable and is actually an ESC/POS printer.
-    Returns True if connected and verified, False otherwise.
+    Check if the printer is reachable. 
+    Returns True if connected, False otherwise.
     """
     ip, port = _parse_ip_port(printer_ip)
 
-    # 1. Basic IP format validation (simple check)
+    # 1. Basic IP format validation
     parts = ip.split('.')
     if len(parts) == 4:
         try:
             if not all(0 <= int(part) <= 255 for part in parts):
-                 logger.debug("[%s] Invalid IP address format", printer_ip)
                  return False
         except ValueError:
             return False
     else:
-        # Check if it's a hostname, if not, it's invalid
         if not all(c.isalnum() or c in '.-' for c in ip):
             return False
 
     # 2. Try raw TCP connection
+    s = None
     try:
-        # We use a very short timeout (1.5s) for the UI status check
-        s = socket.create_connection((ip, port), timeout=1.5)
+        # Use a reasonable timeout for the initial connection
+        s = socket.create_connection((ip, port), timeout=2.0)
         
-        # 3. Printer Identity Check (DLE EOT 1 - Transmit printer status)
-        # This helps verify if the device on the other end is actually a printer.
+        # 3. Best-effort Identity Check
+        # We try to see if it responds like a printer, but we DON'T fail 
+        # if it's silent, as some printers don't support DLE EOT over TCP.
         try:
-            # Send DLE EOT 1 (0x10 0x04 0x01)
-            s.sendall(b'\x10\x04\x01')
-            # Wait for 1 byte response
+            s.settimeout(1.0)
+            s.sendall(b'\x10\x04\x01') # DLE EOT 1
             resp = s.recv(1)
-            s.close()
             if resp:
-                logger.debug("[%s] Verified as ESC/POS printer", printer_ip)
-                return True
-            else:
-                logger.debug("[%s] Connected to device, but no ESC/POS response - likely not a printer", printer_ip)
-                return False
-        except Exception as e:
-            s.close()
-            logger.debug("[%s] Connected but identity check failed: %s", printer_ip, e)
-            # If identity check fails (some printers are silent), we return True 
-            # if we managed to connect, but we prefer a response.
-            # However, user specifically asked to filter non-printers.
-            return False
+                logger.debug("[%s] Verified as ESC/POS printer via DLE EOT", printer_ip)
+        except Exception:
+            # Silent printer or identity check not supported - this is OK
+            logger.debug("[%s] Connected to %s:%s (Silent/No identity response)", printer_ip, ip, port)
+        
+        return True
             
     except (socket.timeout, socket.error, OSError) as e:
-        logger.debug("[%s] Socket connectivity check: FAILED (%s)", printer_ip, e)
+        logger.debug("[%s] Connection failed: %s", printer_ip, e)
         return False
+    finally:
+        if s:
+            try:
+                s.close()
+            except:
+                pass
 
 
 
