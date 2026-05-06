@@ -143,25 +143,31 @@ def check_printer_connectivity(printer_ip: str) -> bool:
 
     # 1. Try raw TCP connection
     try:
-        s = socket.create_connection((ip, port), timeout=2)
+        # We use a very short timeout (1.5s) for the UI status check
+        s = socket.create_connection((ip, port), timeout=1.5)
         s.close()
+        logger.debug("[%s] Socket connectivity check: SUCCESS", printer_ip)
         return True
-    except (socket.timeout, socket.error, OSError):
+    except (socket.timeout, socket.error, OSError) as e:
+        logger.debug("[%s] Socket connectivity check: FAILED (%s)", printer_ip, e)
         pass
 
-    # 2. Fallback to ESC/POS library if available
+    # 2. Fallback to ESC/POS library if available (only if socket failed)
     if not ESCPOS_AVAILABLE:
         return False
     
     try:
         # Some printers might need a specific handshake performed by the library
-        printer = Network(ip, port=port, timeout=3)
+        printer = Network(ip, port=port, timeout=2)
         # We don't strictly check is_online() here because if the connection 
         # was established, it's "accessible".
         printer.close()
+        logger.debug("[%s] ESC/POS library connectivity check: SUCCESS", printer_ip)
         return True
-    except Exception:
+    except Exception as e:
+        logger.debug("[%s] ESC/POS library connectivity check: FAILED (%s)", printer_ip, e)
         return False
+
 
 
 def print_test(printer_ip: str) -> None:
@@ -219,14 +225,18 @@ def print_receipt(printer_ip: str, img_data: str) -> None:
                 logger.warning("[%s] Printer reported offline status via is_online() — proceeding anyway", printer_ip)
 
             # 2. Paper / roll check
-            #    paper_status() returns: 2 = adequate, 1 = near-end, 0 = out
+            #    paper_status() returns: 
+            #    2 = adequate (OK)
+            #    1 = near-end (Low / Half-roll) -> We warn but print.
+            #    0 = out (Empty / Almost end) -> We must STOP.
             paper = printer.paper_status()
             if paper == 0:
                 raise PrinterHardwareError(
-                    f"Printer {printer_ip}: paper roll is empty — cannot print"
+                    f"Printer {printer_ip}: paper roll is EMPTY or ALMOST END — please replace roll"
                 )
             if paper == 1:
-                logger.warning("[%s] Printer paper roll is near-end", printer_ip)
+                # User reported half-roll gives "near-end", so we only log a warning.
+                logger.warning("[%s] Printer paper roll is getting low (near-end)", printer_ip)
         except PrinterHardwareError:
             raise
         except Exception as status_exc:
@@ -265,10 +275,11 @@ def print_receipt(printer_ip: str, img_data: str) -> None:
         # Covers escpos internal errors, status-check errors (paper out, etc.)
         error_msg = str(exc).lower()
         
-        # Check if this is just a warning that we should ignore
-        if any(low in error_msg for low in ("near", "about to end", "low", "warning", "almost")):
-            logger.warning("[%s] Printer reported a non-fatal warning during print: %s", printer_ip, exc)
-            return  # Treat as success if it reached here after cut/image calls
+        # We only treat it as a warning if it contains 'near' or 'low'.
+        # If it says 'out', 'empty', or 'end' without 'near', it's a hard error.
+        if "near" in error_msg or "low" in error_msg:
+             logger.warning("[%s] Printer reported a non-fatal warning during print: %s", printer_ip, exc)
+             return
 
         if any(kw in error_msg for kw in ("paper", "cover", "status", "error", "roll")):
             raise PrinterHardwareError(
@@ -277,6 +288,7 @@ def print_receipt(printer_ip: str, img_data: str) -> None:
         raise PrinterHardwareError(
             f"Printer {printer_ip} unexpected error: {exc}"
         ) from exc
+
 
     finally:
         try:
@@ -319,10 +331,11 @@ def confirm_job(odoo_url: str, headers: dict, job_id: int) -> bool:
 # Poll loop
 # ---------------------------------------------------------------------------
 
-def poll_printer(printer: dict, stop_event: threading.Event):
+def poll_printer(printer: dict, settings: dict, stop_event: threading.Event):
     """
     Runs in a dedicated thread.
-    printer dict keys: id, name, ip, odoo_url, api_key, company_id
+    printer dict keys: id, name, ip
+    settings dict keys: odoo_url, api_key, company_id
 
     Confirmation policy enforced here:
       - print_receipt() succeeds  → confirm_job()
@@ -331,11 +344,17 @@ def poll_printer(printer: dict, stop_event: threading.Event):
     """
     name = printer["name"]
     ip = printer["ip"]
-    odoo_url = printer["odoo_url"].rstrip("/")
-    headers = {"Authorization": f"Bearer {printer['api_key']}"}
-    company_id = printer["company_id"]
+    odoo_url = settings["odoo_url"].rstrip("/")
+    headers = {"Authorization": f"Bearer {settings['api_key']}"}
+    company_id = settings["company_id"]
 
     logger.info("[%s] Polling thread started (IP=%s)", name, ip)
+
+    if not odoo_url or not settings['api_key']:
+        logger.error("[%s] Source URL or API Key not configured. Polling suspended.", name)
+        while not stop_event.is_set():
+            stop_event.wait(60)
+        return
 
     while not stop_event.is_set():
         try:
@@ -411,14 +430,14 @@ class AgentManager:
         self._stop_events: dict[int, threading.Event] = {}
         self._lock = threading.Lock()
 
-    def start(self, printer: dict):
+    def start(self, printer: dict, settings: dict):
         pid = printer["id"]
         with self._lock:
             self._stop_existing(pid)
             stop_event = threading.Event()
             t = threading.Thread(
                 target=poll_printer,
-                args=(printer, stop_event),
+                args=(printer, settings, stop_event),
                 name=f"printer-{pid}",
                 daemon=True,
             )
@@ -430,8 +449,8 @@ class AgentManager:
         with self._lock:
             self._stop_existing(printer_id)
 
-    def restart(self, printer: dict):
-        self.start(printer)
+    def restart(self, printer: dict, settings: dict):
+        self.start(printer, settings)
 
     def is_alive(self, printer_id: int) -> bool:
         t = self._threads.get(printer_id)

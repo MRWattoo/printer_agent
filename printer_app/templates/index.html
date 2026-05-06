@@ -107,11 +107,17 @@
     <nav class="nav-links">
       {% if role == 'admin' %}
         <a href="{{ url_for('users_management') }}">Manage Users</a>
+        <a href="{{ url_for('master_settings') }}">Master Settings</a>
       {% endif %}
       <a href="{{ url_for('change_own_password') }}">Change Password</a>
       <a href="{{ url_for('logout') }}">Logout</a>
     </nav>
     <a href="{{ url_for('add_printer') }}" class="btn-add">+ Add Printer</a>
+    {% if role == 'admin' %}
+      <form action="{{ url_for('sync_printers') }}" method="post" style="display:inline">
+        <button type="submit" class="btn-add" style="background:#e94560; color:#fff; border:none; cursor:pointer;">Sync from Odoo</button>
+      </form>
+    {% endif %}
   </div>
 </header>
 
@@ -133,8 +139,6 @@
           <th>#</th>
           <th>Name</th>
           <th>IP Address</th>
-          <th>Source URL</th>
-          <th>Company</th>
           <th>Status</th>
           <th>Connectivity</th>
           <th>Actions</th>
@@ -146,10 +150,6 @@
           <td>{{ p.id }}</td>
           <td><strong>{{ p.name }}</strong></td>
           <td><code>{{ p.ip }}</code></td>
-          <td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="{{ p.odoo_url }}">
-            {{ p.odoo_url }}
-          </td>
-          <td>{{ p.company_id }}</td>
           <td>
             {% if not p.enabled %}
               <span class="badge badge-disabled">Disabled</span>
@@ -216,8 +216,8 @@
         const row = document.getElementById('row-' + p.id);
         if (!row) return;
         
-        // Update status badge (column 6)
-        const badgeCell = row.querySelector('td:nth-child(6)');
+        // Update status badge (column 4)
+        const badgeCell = row.querySelector('td:nth-child(4)');
         if (badgeCell) {
           let html;
           if (!p.enabled) {
@@ -230,7 +230,7 @@
           badgeCell.innerHTML = html;
         }
         
-        // Update connectivity badge (column 7)
+        // Update connectivity badge (column 5)
         const connectivityCell = document.getElementById('connectivity-' + p.id);
         if (connectivityCell) {
           let html;

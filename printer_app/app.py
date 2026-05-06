@@ -76,19 +76,75 @@ def get_db():
 
 def init_db():
     with get_db() as conn:
+        # 1. Settings table (Global configuration)
         conn.execute(
             """
-            CREATE TABLE IF NOT EXISTS printers (
-                id         INTEGER PRIMARY KEY AUTOINCREMENT,
-                name       TEXT    NOT NULL,
-                ip         TEXT    NOT NULL,
-                odoo_url   TEXT    NOT NULL,
-                api_key    TEXT    NOT NULL,
-                company_id INTEGER NOT NULL DEFAULT 1,
-                enabled    INTEGER NOT NULL DEFAULT 1
+            CREATE TABLE IF NOT EXISTS settings (
+                id           INTEGER PRIMARY KEY CHECK (id = 1),
+                odoo_url     TEXT    NOT NULL DEFAULT '',
+                api_key      TEXT    NOT NULL DEFAULT '',
+                company_id   INTEGER NOT NULL DEFAULT 1,
+                allowed_ip   TEXT    NOT NULL DEFAULT ''
             )
             """
         )
+        # Migration: Add allowed_ip column if it doesn't exist
+        try:
+            conn.execute("ALTER TABLE settings ADD COLUMN allowed_ip TEXT NOT NULL DEFAULT ''")
+        except sqlite3.OperationalError:
+            pass
+
+        # Ensure initial row exists
+        if not conn.execute("SELECT 1 FROM settings WHERE id=1").fetchone():
+            conn.execute("INSERT INTO settings (id, odoo_url, api_key, company_id, allowed_ip) VALUES (1, '', '', 1, '')")
+
+        # 2. Printers table (Simplified)
+        # Note: We keep odoo_url, api_key, company_id for backward compatibility 
+        # during migration or handle it via a new table if preferred. 
+        # For a clean approach, we'll try to rename the old table and recreate.
+        
+        # Check if columns still exist in printers table
+        cursor = conn.execute("PRAGMA table_info(printers)")
+        columns_info = cursor.fetchall()
+        columns = [row[1] for row in columns_info]
+        
+        # Check if 'ip' is already unique
+        is_ip_unique = any(row[1] == 'ip' and row[5] == 1 for row in columns_info) # This isn't reliable for all sqlite versions
+        # Better to check if the table needs recreation based on missing unique constraint or extra columns
+        
+        if "odoo_url" in columns or not is_ip_unique:
+            # Migration step: Move values from first printer to global settings if settings are empty
+            settings = conn.execute("SELECT * FROM settings WHERE id=1").fetchone()
+            if not settings["odoo_url"] or not settings["api_key"]:
+                # Try to get data from old table if it exists, or current table before migration
+                table_to_read = "printers" if "odoo_url" in columns else "printers_old"
+                try:
+                    first_printer = conn.execute(f"SELECT * FROM {table_to_read} LIMIT 1").fetchone()
+                    if first_printer:
+                        conn.execute(
+                            "UPDATE settings SET odoo_url=?, api_key=?, company_id=? WHERE id=1",
+                            (first_printer["odoo_url"], first_printer["api_key"], first_printer["company_id"])
+                        )
+                except:
+                    pass
+
+            # Recreate printers table with UNIQUE IP constraint
+            conn.execute("DROP TABLE IF EXISTS printers_old")
+            conn.execute("ALTER TABLE printers RENAME TO printers_old")
+            conn.execute(
+                """
+                CREATE TABLE printers (
+                    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name       TEXT    NOT NULL,
+                    ip         TEXT    NOT NULL UNIQUE,
+                    enabled    INTEGER NOT NULL DEFAULT 1
+                )
+                """
+            )
+            # Use INSERT OR IGNORE to handle existing duplicates during migration
+            conn.execute("INSERT OR IGNORE INTO printers (id, name, ip, enabled) SELECT id, name, ip, enabled FROM printers_old")
+            conn.execute("DROP TABLE printers_old")
+
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS users (
@@ -117,6 +173,21 @@ def init_db():
                 ("wattoo", "Mohsan Raza Wattoo", hashed, "admin")
             )
             conn.commit()
+
+
+def get_settings() -> dict:
+    with get_db() as conn:
+        row = conn.execute("SELECT * FROM settings WHERE id=1").fetchone()
+    return dict(row) if row else {"odoo_url": "", "api_key": "", "company_id": 1, "allowed_ip": ""}
+
+
+def update_settings(odoo_url: str, api_key: str, company_id: int, allowed_ip: str):
+    with get_db() as conn:
+        conn.execute(
+            "UPDATE settings SET odoo_url=?, api_key=?, company_id=?, allowed_ip=? WHERE id=1",
+            (odoo_url, api_key, company_id, allowed_ip)
+        )
+        conn.commit()
 
 def row_to_dict(row) -> dict:
     return dict(row)
@@ -224,9 +295,14 @@ def admin_change_password(user_id: int):
         return redirect(url_for("users_management"))
 
     if request.method == "POST":
-        new_password = request.form.get("password")
+        new_password = request.form.get("new_password")
+        confirm_password = request.form.get("confirm_password")
+        
         if not new_password:
             return render_template("change_password.html", user=row_to_dict(user), error="Password is required")
+        
+        if new_password != confirm_password:
+            return render_template("change_password.html", user=row_to_dict(user), error="New passwords do not match")
         
         with get_db() as conn:
             conn.execute(
@@ -249,10 +325,14 @@ def change_own_password():
     if request.method == "POST":
         current_password = request.form.get("current_password")
         new_password = request.form.get("new_password")
+        confirm_password = request.form.get("confirm_password")
         
-        if not current_password or not new_password:
+        if not current_password or not new_password or not confirm_password:
             return render_template("change_password.html", error="All fields are required", own_password=True)
         
+        if new_password != confirm_password:
+            return render_template("change_password.html", error="New passwords do not match", own_password=True)
+            
         with get_db() as conn:
             user = conn.execute("SELECT * FROM users WHERE id=?", (user_id,)).fetchone()
         
@@ -279,6 +359,122 @@ def get_all_users(viewer_username=None):
             return conn.execute("SELECT id, username, name, role FROM users WHERE username != 'wattoo'").fetchall()
 
 
+def sync_printers_from_odoo():
+    """
+    Fetch printers from Odoo and update local database.
+    """
+    settings = get_settings()
+    if not settings["odoo_url"] or not settings["api_key"]:
+        return False, "Odoo URL or API Key not configured"
+    
+    try:
+        import requests
+        url = f"{settings['odoo_url'].rstrip('/')}/odoo_pos/printers"
+        headers = {"Authorization": f"Bearer {settings['api_key']}"}
+        # Odoo route expects JSON for auth='none' type='json'
+        resp = requests.post(
+            url, 
+            json={"params": {"company_id": settings["company_id"]}}, 
+            headers=headers, 
+            timeout=10
+        )
+        
+        if resp.status_code == 200:
+            data = resp.json()
+            if "error" in data:
+                return False, f"Odoo Error: {data['error'].get('message', 'Unknown error')}"
+            
+            result_wrapper = data.get("result", {})
+            if result_wrapper.get("status") != "success":
+                return False, f"Odoo API Error: {result_wrapper.get('error', 'Unknown')}"
+            
+            printers_data = result_wrapper.get("result", [])
+            
+            with get_db() as conn:
+                existing = {p["ip"]: p["id"] for p in get_all_printers()}
+                
+                for p_data in printers_data:
+                    name = p_data.get("name")
+                    ip = p_data.get("ip")
+                    if not ip: continue
+                    
+                    if ip in existing:
+                        conn.execute("UPDATE printers SET name=? WHERE ip=?", (name, ip))
+                    else:
+                        conn.execute("INSERT INTO printers (name, ip, enabled) VALUES (?, ?, 1)", (name, ip))
+                conn.commit()
+            
+            # Restart all enabled printers to ensure they use latest settings
+            start_all_enabled()
+            return True, f"Successfully synced {len(printers_data)} printers from Odoo"
+        else:
+            return False, f"Odoo returned HTTP {resp.status_code}"
+    except Exception as e:
+        logging.error("Sync failed: %s", e)
+        return False, f"Sync failed: {str(e)}"
+
+
+@app.before_request
+def restrict_ip():
+    settings = get_settings()
+    allowed = settings.get("allowed_ip")
+    if allowed and allowed.strip():
+        # Allow static files and the login page so users can actually log in 
+        # (or at least see why they are blocked if we add a custom page)
+        if request.endpoint not in ('login', 'static', 'api_status'):
+            client_ip = request.remote_addr
+            # Handle X-Forwarded-For if behind a proxy
+            forwarded = request.headers.get("X-Forwarded-For")
+            if forwarded:
+                client_ip = forwarded.split(",")[0].strip()
+            
+            if client_ip != allowed.strip():
+                from flask import abort
+                logging.warning("Blocked access attempt from unauthorized IP: %s", client_ip)
+                abort(403, description=f"Access denied from IP: {client_ip}")
+
+
+# ---------------------------------------------------------------------------
+# Routes — Master Configuration
+# ---------------------------------------------------------------------------
+
+@app.route("/settings", methods=["GET", "POST"])
+@login_required
+@admin_required
+def master_settings():
+    if request.method == "POST":
+        odoo_url = request.form.get("odoo_url", "").strip()
+        api_key = request.form.get("api_key", "").strip()
+        company_id = int(request.form.get("company_id", 1))
+        allowed_ip = request.form.get("allowed_ip", "").strip()
+
+        update_settings(odoo_url, api_key, company_id, allowed_ip)
+        
+        # Restart all enabled printers to apply new settings
+        settings = get_settings()
+        for p in get_all_printers():
+            if p["enabled"]:
+                agent_manager.restart(p, settings)
+        
+        flash("Global settings updated and printers restarted.", "success")
+        return redirect(url_for("index"))
+
+    settings = get_settings()
+    return render_template("settings.html", settings=settings)
+
+
+@app.route("/sync", methods=["POST"])
+@login_required
+@admin_required
+def sync_printers():
+    success, message = sync_printers_from_odoo()
+    if success:
+        flash(message, "success")
+    else:
+        flash(message, "error")
+    return redirect(url_for("index"))
+
+
 # ---------------------------------------------------------------------------
 # Routes — Printer Management
 # ---------------------------------------------------------------------------
@@ -301,27 +497,28 @@ def add_printer():
     # Both Admin and User can add printers
     if request.method == "POST":
         data = request.form
-        with get_db() as conn:
-            cur = conn.execute(
-                """
-                INSERT INTO printers (name, ip, odoo_url, api_key, company_id, enabled)
-                VALUES (?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    data["name"].strip(),
-                    data["ip"].strip(),
-                    data["odoo_url"].strip(),
-                    data["api_key"].strip(),
-                    int(data.get("company_id", 1)),
-                    1,
-                ),
-            )
-            conn.commit()
-            printer_id = cur.lastrowid
+        try:
+            with get_db() as conn:
+                cur = conn.execute(
+                    """
+                    INSERT INTO printers (name, ip, enabled)
+                    VALUES (?, ?, ?)
+                    """,
+                    (
+                        data["name"].strip(),
+                        data["ip"].strip(),
+                        1,
+                    ),
+                )
+                conn.commit()
+                printer_id = cur.lastrowid
 
-        printer = get_printer(printer_id)
-        agent_manager.start(printer)
-        return redirect(url_for("index"))
+            printer = get_printer(printer_id)
+            agent_manager.start(printer, get_settings())
+            return redirect(url_for("index"))
+        except sqlite3.IntegrityError:
+            flash(f"Error: A printer with IP '{data['ip']}' already exists.", "error")
+            return render_template("form.html", printer=None, title="Add Printer")
 
     return render_template("form.html", printer=None, title="Add Printer")
 
@@ -337,32 +534,33 @@ def edit_printer(printer_id: int):
 
     if request.method == "POST":
         data = request.form
-        with get_db() as conn:
-            conn.execute(
-                """
-                UPDATE printers
-                SET name=?, ip=?, odoo_url=?, api_key=?, company_id=?, enabled=?
-                WHERE id=?
-                """,
-                (
-                    data["name"].strip(),
-                    data["ip"].strip(),
-                    data["odoo_url"].strip(),
-                    data["api_key"].strip(),
-                    int(data.get("company_id", 1)),
-                    int(data.get("enabled", 1)),
-                    printer_id,
-                ),
-            )
-            conn.commit()
+        try:
+            with get_db() as conn:
+                conn.execute(
+                    """
+                    UPDATE printers
+                    SET name=?, ip=?, enabled=?
+                    WHERE id=?
+                    """,
+                    (
+                        data["name"].strip(),
+                        data["ip"].strip(),
+                        int(data.get("enabled", 1)),
+                        printer_id,
+                    ),
+                )
+                conn.commit()
 
-        updated = get_printer(printer_id)
-        if updated["enabled"]:
-            agent_manager.restart(updated)
-        else:
-            agent_manager.stop(printer_id)
+            updated = get_printer(printer_id)
+            if updated["enabled"]:
+                agent_manager.restart(updated, get_settings())
+            else:
+                agent_manager.stop(printer_id)
 
-        return redirect(url_for("index"))
+            return redirect(url_for("index"))
+        except sqlite3.IntegrityError:
+            flash(f"Error: IP address '{data['ip']}' is already used by another printer.", "error")
+            return render_template("form.html", printer=printer, title="Edit Printer")
 
     return render_template("form.html", printer=printer, title="Edit Printer")
 
@@ -398,7 +596,7 @@ def toggle_printer(printer_id: int):
 
     updated = get_printer(printer_id)
     if updated["enabled"]:
-        agent_manager.start(updated)
+        agent_manager.start(updated, get_settings())
     else:
         agent_manager.stop(printer_id)
 
@@ -454,9 +652,10 @@ def api_status():
 # ---------------------------------------------------------------------------
 
 def start_all_enabled():
+    settings = get_settings()
     for p in get_all_printers():
         if p["enabled"]:
-            agent_manager.start(p)
+            agent_manager.start(p, settings)
 
 
 def main():

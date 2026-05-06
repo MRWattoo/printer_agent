@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>{{ title }} — Printer Manager</title>
+  <title>Master Settings — Printer Manager</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -39,7 +39,7 @@
       margin-bottom: .3rem;
     }
 
-    input[type=text], input[type=number] {
+    input[type=text], input[type=number], input[type=password] {
       width: 100%;
       padding: .55rem .8rem;
       border: 1px solid #d1d5db;
@@ -49,14 +49,6 @@
       transition: border-color .2s;
     }
     input:focus { outline: none; border-color: #0f3460; }
-
-    .toggle-row {
-      display: flex;
-      align-items: center;
-      gap: .75rem;
-      margin-bottom: 1.5rem;
-    }
-    .toggle-row label { margin: 0; }
 
     .btn-row {
       display: flex;
@@ -85,50 +77,51 @@
       transition: background .2s;
     }
     a.btn-cancel:hover { background: #d1d5db; }
+    
+    .help-text {
+      font-size: 0.75rem;
+      color: #6b7280;
+      margin-top: -0.8rem;
+      margin-bottom: 1rem;
+    }
   </style>
 </head>
 <body>
 
 <header>
-  <h1>&#128438; Printer Manager — {{ title }}</h1>
+  <h1>&#128438; Printer Manager — Master Settings</h1>
 </header>
 
 <main>
-  {% with messages = get_flashed_messages(with_categories=true) %}
-    {% if messages %}
-      {% for category, message in messages %}
-        <div style="padding: 1rem; margin-bottom: 1rem; border-radius: 6px; background: {% if category == 'success' %}#d1fae5; color: #047857{% else %}#fee2e2; color: #b91c1c{% endif %}; text-align: center; font-weight: 500;">
-          {{ message }}
-        </div>
-      {% endfor %}
-    {% endif %}
-  {% endwith %}
   <div class="card">
-    <h2>{{ title }}</h2>
+    <h2>Master Configuration</h2>
+    <p class="help-text">These settings apply to all configured printers.</p>
     <form method="post">
 
-      <label for="name">Printer Name</label>
-      <input type="text" id="name" name="name" required
-             placeholder="e.g. Counter-1 Receipt"
-             value="{{ printer.name if printer else '' }}" />
+      <label for="odoo_url">Source URL (Odoo / API base URL)</label>
+      <input type="text" id="odoo_url" name="odoo_url" required
+             placeholder="e.g. https://your-odoo.example.com"
+             value="{{ settings.odoo_url }}" />
 
-      <label for="ip">Printer IP Address</label>
-      <input type="text" id="ip" name="ip" required
-             placeholder="e.g. 192.168.0.101"
-             value="{{ printer.ip if printer else '' }}" />
+      <label for="api_key">Access Token / API Key</label>
+      <input type="text" id="api_key" name="api_key" required
+             placeholder="Bearer token or API key"
+             value="{{ settings.api_key }}" />
 
-      {% if printer %}
-      <div class="toggle-row">
-        <input type="checkbox" id="enabled" name="enabled" value="1"
-               {{ 'checked' if printer.enabled else '' }}>
-        <label for="enabled">Enabled (polling active)</label>
-      </div>
-      {% else %}
-      <input type="hidden" name="enabled" value="1" />
-      {% endif %}
+      <label for="company_id">Company ID</label>
+      <input type="number" id="company_id" name="company_id" required
+             placeholder="1"
+             min="1"
+             value="{{ settings.company_id }}" />
+
+      <label for="allowed_ip">Allowed Client IP Address (Restricts Web UI Access)</label>
+      <input type="text" id="allowed_ip" name="allowed_ip"
+             placeholder="e.g. 192.168.1.50 (leave empty to allow all)"
+             value="{{ settings.allowed_ip }}" />
+      <p class="help-text">If set, only this IP will be able to access the application UI. Leave blank to disable this restriction.</p>
 
       <div class="btn-row">
-        <button type="submit">Save</button>
+        <button type="submit">Save Settings</button>
         <a href="{{ url_for('index') }}" class="btn-cancel">Cancel</a>
       </div>
     </form>
