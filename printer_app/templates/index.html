@@ -225,7 +225,7 @@
           } else if (p.running && p.connected) {
             html = '<span class="badge badge-running">Running</span>';
           } else {
-            html = '<span class="badge badge-stopped">Stopped</span>';
+            html = '<span class="badge badge-stopped">Failed</span>';
           }
           badgeCell.innerHTML = html;
         }
@@ -239,7 +239,7 @@
           } else if (p.connected) {
             html = '<span class="badge badge-connected">Connected</span>';
           } else {
-            html = '<span class="badge badge-offline">Offline</span>';
+            html = '<span class="badge badge-offline">Failed</span>';
           }
           connectivityCell.innerHTML = html;
         }

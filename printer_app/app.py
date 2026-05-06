@@ -640,6 +640,7 @@ def api_status():
                 "ip": p["ip"],
                 "enabled": bool(p["enabled"]),
                 "running": agent_manager.is_alive(p["id"]),
+                # connected now means verified as a printer
                 "connected": check_printer_connectivity(p["ip"]) if p["enabled"] else False,
             }
             for p in printers
