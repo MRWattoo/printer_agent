@@ -44,6 +44,9 @@ app = Flask(
 )
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "super-secret-printer-key")
 
+# Version
+__version__ = "1.0.0"
+
 # Session configuration: 10 minutes timeout
 app.permanent_session_lifetime = timedelta(minutes=10)
 app.config.update(
@@ -53,6 +56,10 @@ app.config.update(
 @app.before_request
 def make_session_permanent():
     session.permanent = True
+
+@app.context_processor
+def inject_version():
+    return dict(version=__version__)
 
 
 # ---------------------------------------------------------------------------
@@ -675,11 +682,7 @@ def main():
     """Entry point called by the `printer-app` console script."""
     import sys
     if len(sys.argv) > 1 and sys.argv[1] == "--version":
-        from importlib.metadata import version, PackageNotFoundError
-        try:
-            print(version("printer-app"))
-        except PackageNotFoundError:
-            print("unknown")
+        print(__version__)
         return
 
     port = int(os.environ.get("PRINTER_APP_PORT", 5000))

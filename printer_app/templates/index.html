@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Printer Manager</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><text y='22' font-size='20'>🖨️</text></svg>">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -23,12 +24,15 @@
       justify-content: space-between;
     }
     
-    .header-left { display: flex; align-items: center; gap: 2rem; }
-    header h1 { font-size: 1.2rem; letter-spacing: .05em; margin-right: 1rem; border-right: 1px solid #2d3748; padding-right: 1.5rem; }
+    .header-left { display: flex; align-items: center; }
+    .header-title-group { display: flex; flex-direction: column; }
+    header h1 { font-size: 1.2rem; letter-spacing: .05em; line-height: 1.1; }
+    .app-version { font-size: 0.65rem; color: #9ca3af; margin-top: 0.2rem; }
     
-    /* User Dropdown Styles */
-    .user-menu { position: relative; display: inline-block; }
-    .user-info { 
+    /* Menu Styles */
+    .menu-container { position: relative; display: inline-block; margin-left: 1.5rem; }
+    .user-menu { margin-right: 0; }
+    .menu-btn { 
       font-size: 0.9rem; 
       color: #cdd6f4; 
       cursor: pointer; 
@@ -39,13 +43,13 @@
       border-radius: 6px;
       transition: background 0.2s;
     }
-    .user-info:hover { background: rgba(255,255,255,0.1); }
-    .user-info::after { content: '▾'; font-size: 0.8rem; }
+    .menu-btn:hover { background: rgba(255,255,255,0.1); }
+    .menu-btn::after { content: '▾'; font-size: 0.8rem; }
     
     .dropdown-content {
       display: none;
       position: absolute;
-      left: 0;
+      right: 0;
       top: 100%;
       background-color: #fff;
       min-width: 180px;
@@ -54,6 +58,10 @@
       border-radius: 6px;
       margin-top: 5px;
       overflow: hidden;
+    }
+    .settings-menu .dropdown-content {
+      left: 0;
+      right: auto;
     }
     .dropdown-content a {
       color: #1a1a2e;
@@ -65,12 +73,12 @@
     }
     .dropdown-content a:hover { background-color: #f0f2f5; }
     .dropdown-content a:not(:last-child) { border-bottom: 1px solid #f0f2f5; }
-    .user-menu:hover .dropdown-content { display: block; }
+    .menu-container:hover .dropdown-content { display: block; }
 
-    .header-right { display: flex; align-items: center; gap: 1rem; }
-    
-    header .btn-group { display: flex; gap: 0.75rem; }
-    header a.btn-add {
+    .header-right { display: flex; align-items: center; }
+
+    /* Card buttons */
+    a.btn-add {
       background: #0f3460;
       color: #e94560;
       border: 2px solid #e94560;
@@ -81,19 +89,7 @@
       font-size: 0.85rem;
       transition: background .2s;
     }
-    header a.btn-add:hover { background: #e94560; color: #fff; }
-    header button.btn-sync {
-      background: #e94560;
-      color: #fff;
-      border: none;
-      padding: .45rem 1.1rem;
-      border-radius: 6px;
-      font-weight: 600;
-      font-size: 0.85rem;
-      cursor: pointer;
-      transition: opacity 0.2s;
-    }
-    header button.btn-sync:hover { opacity: 0.9; }
+    a.btn-add:hover { background: #e94560; color: #fff; }
 
     main { max-width: 1100px; margin: 2rem auto; padding: 0 1rem; }
 
@@ -149,6 +145,59 @@
       color: #9ca3af;
     }
 
+    /* Pagination Styles */
+    .pagination-controls {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1rem;
+    }
+    .page-size-selector label {
+      display: inline;
+      margin-right: 0.5rem;
+      color: #374151;
+    }
+    .page-size-selector select {
+      padding: 0.3rem 0.5rem;
+      border-radius: 4px;
+      border: 1px solid #d1d5db;
+      font-size: 0.9rem;
+    }
+    .pagination-bar {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 0.5rem;
+      margin-top: 1.5rem;
+    }
+    .page-btn {
+      padding: 0.4rem 0.8rem;
+      border: 1px solid #d1d5db;
+      border-radius: 4px;
+      background: #fff;
+      cursor: pointer;
+      color: #374151;
+      font-weight: 600;
+      font-size: 0.85rem;
+      transition: all 0.2s;
+    }
+    .page-btn:hover:not(:disabled) {
+      background: #f0f2f5;
+    }
+    .page-btn.active {
+      background: #0f3460;
+      color: #fff;
+      border-color: #0f3460;
+    }
+    .page-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .page-ellipsis {
+      padding: 0.4rem 0.2rem;
+      color: #6b7280;
+    }
+
     footer { text-align: center; margin: 2rem 0; color: #9ca3af; font-size: .8rem; }
   </style>
 </head>
@@ -156,30 +205,32 @@
 
 <header>
   <div class="header-left">
-    <h1>&#128438; Printer Manager</h1>
-    <div class="user-menu">
-      <div class="user-info">
-        Logged in: <strong>{{ display_name }}</strong> ({{ role }})
-      </div>
+    <div class="header-title-group">
+      <h1>&#128438; Printer Manager</h1>
+      <span class="app-version">Version {{ version }}</span>
+    </div>
+    {% if role == 'admin' %}
+    <div class="menu-container settings-menu">
+      <div class="menu-btn">Settings</div>
       <div class="dropdown-content">
-        {% if role == 'admin' %}
-          <a href="{{ url_for('users_management') }}">Manage Users</a>
-          <a href="{{ url_for('master_settings') }}">Master Settings</a>
-        {% endif %}
-        <a href="{{ url_for('change_own_password') }}">Change Password</a>
-        <a href="{{ url_for('logout') }}">Logout</a>
+        <a href="{{ url_for('users_management') }}">User Management</a>
+        <a href="{{ url_for('master_settings') }}">Configuration</a>
+        <form id="sync-form" action="{{ url_for('sync_printers') }}" method="post" style="display:none;"></form>
+        <a href="#" onclick="document.getElementById('sync-form').submit(); return false;">Sync from Odoo</a>
       </div>
     </div>
+    {% endif %}
   </div>
   
   <div class="header-right">
-    <div class="btn-group">
-      {% if role == 'admin' %}
-        <form action="{{ url_for('sync_printers') }}" method="post" style="display:inline">
-          <button type="submit" class="btn-sync">Sync from Odoo</button>
-        </form>
-      {% endif %}
-      <a href="{{ url_for('add_printer') }}" class="btn-add">+ Add Printer</a>
+    <div class="menu-container user-menu">
+      <div class="menu-btn">
+        {{ display_name }} ({{ role }})
+      </div>
+      <div class="dropdown-content">
+        <a href="{{ url_for('change_own_password') }}">Change Password</a>
+        <a href="{{ url_for('logout') }}">Logout</a>
+      </div>
     </div>
   </div>
 </header>
@@ -194,9 +245,22 @@
       {% endfor %}
     {% endif %}
   {% endwith %}
-  <div class="card">
+  <div class="card" style="padding: 1.5rem;">
+    <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+      <div class="pagination-controls" style="margin-bottom: 0; {% if not printers %}visibility: hidden;{% endif %}">
+        <div class="page-size-selector">
+          <label for="pageSize">Items per page:</label>
+          <select id="pageSize">
+            <option value="10">10</option>
+            <option value="20">20</option>
+            <option value="30">30</option>
+          </select>
+        </div>
+      </div>
+      <a href="{{ url_for('add_printer') }}" class="btn-add">+ Add Printer</a>
+    </div>
     {% if printers %}
-    <table>
+    <table id="printersTable">
       <thead>
         <tr>
           <th>#</th>
@@ -209,7 +273,7 @@
       </thead>
       <tbody id="printer-rows">
         {% for p in printers %}
-        <tr id="row-{{ p.id }}">
+        <tr id="row-{{ p.id }}" class="printer-row">
           <td>{{ p.id }}</td>
           <td><strong>{{ p.name }}</strong></td>
           <td><code>{{ p.ip }}</code></td>
@@ -255,10 +319,10 @@
         {% endfor %}
       </tbody>
     </table>
+    <div class="pagination-bar" id="paginationBar"></div>
     {% else %}
     <div class="empty">
       <p>No printers configured yet.</p>
-      <p style="margin-top:.5rem"><a href="{{ url_for('add_printer') }}">Add your first printer</a></p>
     </div>
     {% endif %}
   </div>
@@ -267,6 +331,138 @@
 <footer>Printer Application &mdash; auto-refreshes status every 5 seconds</footer>
 
 <script>
+  // Pagination State
+  let currentPage = 1;
+  let rowsPerPage = 10;
+  
+  function initPagination() {
+    const table = document.getElementById('printersTable');
+    if (!table) return;
+    const tbody = table.querySelector('tbody');
+    const rows = Array.from(tbody.querySelectorAll('tr.printer-row'));
+    if (rows.length === 0) return;
+
+    const pageSizeSelect = document.getElementById('pageSize');
+    if (pageSizeSelect) {
+      pageSizeSelect.addEventListener('change', function(e) {
+        rowsPerPage = parseInt(e.target.value, 10);
+        currentPage = 1;
+        renderTable();
+      });
+    }
+    
+    renderTable();
+  }
+
+  function renderTable() {
+    const table = document.getElementById('printersTable');
+    if (!table) return;
+    const tbody = table.querySelector('tbody');
+    const rows = Array.from(tbody.querySelectorAll('tr.printer-row'));
+    
+    const totalPages = Math.ceil(rows.length / rowsPerPage);
+    
+    // Ensure current page is within bounds
+    if (currentPage > totalPages) currentPage = Math.max(1, totalPages);
+    if (currentPage < 1) currentPage = 1;
+
+    // Show/Hide rows
+    rows.forEach((row, index) => {
+      if (index >= (currentPage - 1) * rowsPerPage && index < currentPage * rowsPerPage) {
+        row.style.display = '';
+      } else {
+        row.style.display = 'none';
+      }
+    });
+
+    renderPaginationBar(totalPages);
+  }
+
+  function renderPaginationBar(totalPages) {
+    const bar = document.getElementById('paginationBar');
+    if (!bar) return;
+    bar.innerHTML = '';
+
+    if (totalPages <= 1) return;
+
+    // Prev Button
+    const prevBtn = document.createElement('button');
+    prevBtn.className = 'page-btn';
+    prevBtn.innerHTML = '&laquo; Prev';
+    prevBtn.disabled = currentPage === 1;
+    prevBtn.addEventListener('click', () => {
+      if (currentPage > 1) {
+        currentPage--;
+        renderTable();
+      }
+    });
+    bar.appendChild(prevBtn);
+
+    // Numbered Buttons with Ellipsis logic
+    let startPage = Math.max(1, currentPage - 2);
+    let endPage = Math.min(totalPages, currentPage + 2);
+
+    if (currentPage <= 3) {
+      endPage = Math.min(totalPages, 5);
+    }
+    if (currentPage >= totalPages - 2) {
+      startPage = Math.max(1, totalPages - 4);
+    }
+
+    if (startPage > 1) {
+      bar.appendChild(createPageBtn(1));
+      if (startPage > 2) {
+        const ellipsis = document.createElement('span');
+        ellipsis.className = 'page-ellipsis';
+        ellipsis.innerHTML = '&hellip;';
+        bar.appendChild(ellipsis);
+      }
+    }
+
+    for (let i = startPage; i <= endPage; i++) {
+      bar.appendChild(createPageBtn(i));
+    }
+
+    if (endPage < totalPages) {
+      if (endPage < totalPages - 1) {
+        const ellipsis = document.createElement('span');
+        ellipsis.className = 'page-ellipsis';
+        ellipsis.innerHTML = '&hellip;';
+        bar.appendChild(ellipsis);
+      }
+      bar.appendChild(createPageBtn(totalPages));
+    }
+
+    // Next Button
+    const nextBtn = document.createElement('button');
+    nextBtn.className = 'page-btn';
+    nextBtn.innerHTML = 'Next &raquo;';
+    nextBtn.disabled = currentPage === totalPages;
+    nextBtn.addEventListener('click', () => {
+      if (currentPage < totalPages) {
+        currentPage++;
+        renderTable();
+      }
+    });
+    bar.appendChild(nextBtn);
+  }
+
+  function createPageBtn(pageNumber) {
+    const btn = document.createElement('button');
+    btn.className = 'page-btn';
+    if (pageNumber === currentPage) {
+      btn.classList.add('active');
+    }
+    btn.textContent = pageNumber;
+    btn.addEventListener('click', () => {
+      currentPage = pageNumber;
+      renderTable();
+    });
+    return btn;
+  }
+  
+  document.addEventListener('DOMContentLoaded', initPagination);
+
   async function refreshStatus() {
     try {
       const res = await fetch('/api/status');
