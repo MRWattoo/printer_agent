@@ -17,18 +17,59 @@
     header {
       background: #16213e;
       color: #fff;
-      padding: 1rem 2rem;
+      padding: 0.8rem 2rem;
       display: flex;
       align-items: center;
       justify-content: space-between;
     }
-    header h1 { font-size: 1.3rem; letter-spacing: .05em; }
     
-    .header-right { display: flex; align-items: center; gap: 1rem; }
-    .user-info { font-size: 0.9rem; color: #cdd6f4; }
-    .nav-links a { color: #fff; text-decoration: none; font-size: 0.9rem; margin-left: 1rem; }
-    .nav-links a:hover { text-decoration: underline; }
+    .header-left { display: flex; align-items: center; gap: 2rem; }
+    header h1 { font-size: 1.2rem; letter-spacing: .05em; margin-right: 1rem; border-right: 1px solid #2d3748; padding-right: 1.5rem; }
+    
+    /* User Dropdown Styles */
+    .user-menu { position: relative; display: inline-block; }
+    .user-info { 
+      font-size: 0.9rem; 
+      color: #cdd6f4; 
+      cursor: pointer; 
+      display: flex; 
+      align-items: center; 
+      gap: 0.5rem;
+      padding: 0.4rem 0.8rem;
+      border-radius: 6px;
+      transition: background 0.2s;
+    }
+    .user-info:hover { background: rgba(255,255,255,0.1); }
+    .user-info::after { content: '▾'; font-size: 0.8rem; }
+    
+    .dropdown-content {
+      display: none;
+      position: absolute;
+      left: 0;
+      top: 100%;
+      background-color: #fff;
+      min-width: 180px;
+      box-shadow: 0 8px 16px rgba(0,0,0,0.2);
+      z-index: 100;
+      border-radius: 6px;
+      margin-top: 5px;
+      overflow: hidden;
+    }
+    .dropdown-content a {
+      color: #1a1a2e;
+      padding: 10px 16px;
+      text-decoration: none;
+      display: block;
+      font-size: 0.85rem;
+      transition: background 0.2s;
+    }
+    .dropdown-content a:hover { background-color: #f0f2f5; }
+    .dropdown-content a:not(:last-child) { border-bottom: 1px solid #f0f2f5; }
+    .user-menu:hover .dropdown-content { display: block; }
 
+    .header-right { display: flex; align-items: center; gap: 1rem; }
+    
+    header .btn-group { display: flex; gap: 0.75rem; }
     header a.btn-add {
       background: #0f3460;
       color: #e94560;
@@ -37,9 +78,22 @@
       border-radius: 6px;
       text-decoration: none;
       font-weight: 600;
+      font-size: 0.85rem;
       transition: background .2s;
     }
     header a.btn-add:hover { background: #e94560; color: #fff; }
+    header button.btn-sync {
+      background: #e94560;
+      color: #fff;
+      border: none;
+      padding: .45rem 1.1rem;
+      border-radius: 6px;
+      font-weight: 600;
+      font-size: 0.85rem;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+    header button.btn-sync:hover { opacity: 0.9; }
 
     main { max-width: 1100px; margin: 2rem auto; padding: 0 1rem; }
 
@@ -101,23 +155,32 @@
 <body>
 
 <header>
-  <h1>&#128438; Printer Manager</h1>
+  <div class="header-left">
+    <h1>&#128438; Printer Manager</h1>
+    <div class="user-menu">
+      <div class="user-info">
+        Logged in: <strong>{{ display_name }}</strong> ({{ role }})
+      </div>
+      <div class="dropdown-content">
+        {% if role == 'admin' %}
+          <a href="{{ url_for('users_management') }}">Manage Users</a>
+          <a href="{{ url_for('master_settings') }}">Master Settings</a>
+        {% endif %}
+        <a href="{{ url_for('change_own_password') }}">Change Password</a>
+        <a href="{{ url_for('logout') }}">Logout</a>
+      </div>
+    </div>
+  </div>
+  
   <div class="header-right">
-    <span class="user-info">Logged in as: <strong>{{ display_name }}</strong> ({{ role }})</span>
-    <nav class="nav-links">
+    <div class="btn-group">
       {% if role == 'admin' %}
-        <a href="{{ url_for('users_management') }}">Manage Users</a>
-        <a href="{{ url_for('master_settings') }}">Master Settings</a>
+        <form action="{{ url_for('sync_printers') }}" method="post" style="display:inline">
+          <button type="submit" class="btn-sync">Sync from Odoo</button>
+        </form>
       {% endif %}
-      <a href="{{ url_for('change_own_password') }}">Change Password</a>
-      <a href="{{ url_for('logout') }}">Logout</a>
-    </nav>
-    <a href="{{ url_for('add_printer') }}" class="btn-add">+ Add Printer</a>
-    {% if role == 'admin' %}
-      <form action="{{ url_for('sync_printers') }}" method="post" style="display:inline">
-        <button type="submit" class="btn-add" style="background:#e94560; color:#fff; border:none; cursor:pointer;">Sync from Odoo</button>
-      </form>
-    {% endif %}
+      <a href="{{ url_for('add_printer') }}" class="btn-add">+ Add Printer</a>
+    </div>
   </div>
 </header>
 
