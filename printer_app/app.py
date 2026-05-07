@@ -689,6 +689,18 @@ def test_print(printer_id: int):
 @app.route("/api/status")
 def api_status():
     printers = get_all_printers()
+    # Fetch last failure reason for each printer
+    with get_db() as conn:
+        last_logs = conn.execute(
+            """
+            SELECT printer_id, reason FROM print_logs 
+            WHERE status='failed' 
+            GROUP BY printer_id 
+            HAVING MAX(timestamp)
+            """
+        ).fetchall()
+        reasons = {log['printer_id']: log['reason'] for log in last_logs}
+
     return jsonify(
         [
             {
@@ -697,8 +709,8 @@ def api_status():
                 "ip": p["ip"],
                 "enabled": bool(p["enabled"]),
                 "running": agent_manager.is_alive(p["id"]),
-                # connected now means verified as a printer
                 "connected": check_printer_connectivity(p["ip"]) if p["enabled"] else False,
+                "reason": reasons.get(p["id"], "")
             }
             for p in printers
         ]

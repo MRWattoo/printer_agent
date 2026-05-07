@@ -61,6 +61,7 @@
           <th>IP Address</th>
           <th>Status</th>
           <th>Connectivity</th>
+          <th>Failure Reason</th>
           <th>Actions</th>
         </tr>
       </thead>
@@ -84,8 +85,8 @@
               <span class="badge badge-offline">Checking...</span>
             {% endif %}
           </td>
+          <td id="reason-{{ p.id }}" style="font-size:0.8rem; color:#b91c1c;"></td>
           <td>
-            <div class="actions">
               <form method="post" action="{{ url_for('test_print', printer_id=p.id) }}" style="display:inline">
                 <button type="submit" class="btn btn-test">Test Print</button>
               </form>
