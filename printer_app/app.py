@@ -528,9 +528,16 @@ def logs():
     return render_template("logs.html", logs=logs)
 
 
-# ---------------------------------------------------------------------------
-# Routes — Printer Management
-# ---------------------------------------------------------------------------
+@app.route("/sync", methods=["POST"])
+@login_required
+@admin_required
+def sync_printers():
+    success, message = sync_printers_from_odoo()
+    if success:
+        flash(message, "success")
+    else:
+        flash(message, "error")
+    return redirect(url_for("index"))
 
 @app.route("/")
 @login_required
