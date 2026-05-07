@@ -1,3 +1,4 @@
+{% import 'header.html' as header %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -35,38 +36,7 @@
 </head>
 <body>
 
-<header>
-  <div class="header-left">
-    <a href="{{ url_for('index') }}" style="text-decoration:none; color:inherit;">
-      <div class="header-title-group">
-        <h1>&#128438; Printer Manager</h1>
-        <span class="app-version">Version {{ version }}</span>
-      </div>
-    </a>
-    {% if role == 'admin' %}
-    <div class="menu-container settings-menu">
-      <div class="menu-btn">Settings</div>
-      <div class="dropdown-content">
-        <a href="{{ url_for('users_management') }}">User Management</a>
-        <a href="{{ url_for('master_settings') }}">Configuration</a>
-        <a href="{{ url_for('updates') }}">Updates</a>
-        <form id="sync-form" action="{{ url_for('sync_printers') }}" method="post" style="display:none;"></form>
-        <a href="#" onclick="document.getElementById('sync-form').submit(); return false;">Sync from Odoo</a>
-      </div>
-    </div>
-    {% endif %}
-  </div>
-  
-  <div class="header-right">
-    <div class="menu-container user-menu">
-      <div class="menu-btn">{{ display_name }} ({{ role }})</div>
-      <div class="dropdown-content">
-        <a href="{{ url_for('change_own_password') }}">Change Password</a>
-        <a href="{{ url_for('logout') }}">Logout</a>
-      </div>
-    </div>
-  </div>
-</header>
+{{ header.render_header(self.title(), role, display_name, version) }}
 
 <main>
   {% with messages = get_flashed_messages(with_categories=true) %}
@@ -97,6 +67,7 @@
     window.addEventListener('click', function() {
       document.querySelectorAll('.dropdown-content').forEach(d => d.classList.remove('show'));
     });
+    console.log("Dropdown JS initialized");
   });
   {% block extra_scripts %}{% endblock %}
 </script>
