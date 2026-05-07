@@ -146,10 +146,10 @@ def _parse_ip_port(ip_str: str) -> tuple[str, int]:
     return ip_str, 9100
 
 
-def check_printer_connectivity(printer_ip: str) -> bool:
+def check_printer_connectivity(printer_ip: str) -> tuple[bool, str]:
     """
     Check if the printer is reachable. 
-    Returns True if connected, False otherwise.
+    Returns (True, '') if connected, (False, reason) otherwise.
     """
     ip, port = _parse_ip_port(printer_ip)
 
@@ -158,22 +158,19 @@ def check_printer_connectivity(printer_ip: str) -> bool:
     if len(parts) == 4:
         try:
             if not all(0 <= int(part) <= 255 for part in parts):
-                 return False
+                 return False, "Invalid IP format"
         except ValueError:
-            return False
+            return False, "Invalid IP format"
     else:
         if not all(c.isalnum() or c in '.-' for c in ip):
-            return False
+            return False, "Invalid IP/Hostname"
 
     # 2. Try raw TCP connection
     s = None
     try:
-        # Use a reasonable timeout for the initial connection
         s = socket.create_connection((ip, port), timeout=2.0)
         
         # 3. Best-effort Identity Check
-        # We try to see if it responds like a printer, but we DON'T fail 
-        # if it's silent, as some printers don't support DLE EOT over TCP.
         try:
             s.settimeout(1.0)
             s.sendall(b'\x10\x04\x01') # DLE EOT 1
@@ -181,14 +178,14 @@ def check_printer_connectivity(printer_ip: str) -> bool:
             if resp:
                 logger.debug("[%s] Verified as ESC/POS printer via DLE EOT", printer_ip)
         except Exception:
-            # Silent printer or identity check not supported - this is OK
             logger.debug("[%s] Connected to %s:%s (Silent/No identity response)", printer_ip, ip, port)
         
-        return True
+        return True, ""
             
-    except (socket.timeout, socket.error, OSError) as e:
-        logger.debug("[%s] Connection failed: %s", printer_ip, e)
-        return False
+    except socket.timeout:
+        return False, "Connection timed out"
+    except (socket.error, OSError) as e:
+        return False, f"Host unreachable: {e.strerror or str(e)}"
     finally:
         if s:
             try:

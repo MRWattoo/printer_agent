@@ -695,7 +695,6 @@ def api_status():
     printers = get_all_printers()
     # Fetch last failure reason for each printer
     with get_db() as conn:
-        # Get the most recent reason for each printer_id that failed
         last_logs = conn.execute(
             """
             SELECT printer_id, reason 
@@ -709,23 +708,27 @@ def api_status():
             )
             """
         ).fetchall()
-        reasons = {log['printer_id']: log['reason'] for log in last_logs}
-        logging.debug(f"Retrieved reasons: {reasons}")
+        log_reasons = {log['printer_id']: log['reason'] for log in last_logs}
 
-    return jsonify(
-        [
-            {
-                "id": p["id"],
-                "name": p["name"],
-                "ip": p["ip"],
-                "enabled": bool(p["enabled"]),
-                "running": agent_manager.is_alive(p["id"]),
-                "connected": check_printer_connectivity(p["ip"]) if p["enabled"] else False,
-                "reason": reasons.get(p["id"], "")
-            }
-            for p in printers
-        ]
-    )
+    results = []
+    for p in printers:
+        is_conn, conn_reason = check_printer_connectivity(p["ip"]) if p["enabled"] else (False, "Disabled")
+        
+        # Determine failure reason: preference to current connectivity failure, 
+        # then last print log failure.
+        reason = conn_reason if not is_conn and p["enabled"] else log_reasons.get(p["id"], "")
+
+        results.append({
+            "id": p["id"],
+            "name": p["name"],
+            "ip": p["ip"],
+            "enabled": bool(p["enabled"]),
+            "running": agent_manager.is_alive(p["id"]),
+            "connected": is_conn,
+            "reason": reason
+        })
+
+    return jsonify(results)
 
 
 # ---------------------------------------------------------------------------
