@@ -515,7 +515,8 @@ def index():
                            statuses=statuses,
                            role=session.get('role'),
                            username=session.get('username'),
-                           display_name=session.get('name') or session.get('username'))
+                           display_name=session.get('name') or session.get('username'),
+                           version=__version__)
 
 @app.route("/add", methods=["GET", "POST"])
 @login_required
@@ -544,9 +545,9 @@ def add_printer():
             return redirect(url_for("index"))
         except sqlite3.IntegrityError:
             flash(f"Error: A printer with IP '{data['ip']}' already exists.", "error")
-            return render_template("form.html", printer=None, title="Add Printer")
+            return render_template("form.html", printer=None, title="Add Printer", role=session.get('role'), display_name=session.get('name') or session.get('username'), version=__version__)
 
-    return render_template("form.html", printer=None, title="Add Printer")
+    return render_template("form.html", printer=None, title="Add Printer", role=session.get('role'), display_name=session.get('name') or session.get('username'), version=__version__)
 
 
 @app.route("/edit/<int:printer_id>", methods=["GET", "POST"])
@@ -586,9 +587,9 @@ def edit_printer(printer_id: int):
             return redirect(url_for("index"))
         except sqlite3.IntegrityError:
             flash(f"Error: IP address '{data['ip']}' is already used by another printer.", "error")
-            return render_template("form.html", printer=printer, title="Edit Printer")
+            return render_template("form.html", printer=printer, title="Edit Printer", role=session.get('role'), display_name=session.get('name') or session.get('username'), version=__version__)
 
-    return render_template("form.html", printer=printer, title="Edit Printer")
+    return render_template("form.html", printer=printer, title="Edit Printer", role=session.get('role'), display_name=session.get('name') or session.get('username'), version=__version__)
 
 
 @app.route("/delete/<int:printer_id>", methods=["POST"])
