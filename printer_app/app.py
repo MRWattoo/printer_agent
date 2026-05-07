@@ -186,6 +186,18 @@ def init_db():
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS print_logs (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                printer_id  INTEGER,
+                printer_name TEXT,
+                status      TEXT,
+                reason      TEXT,
+                timestamp   DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
 
         # Migration: Add name column if it doesn't exist
         try:
@@ -203,6 +215,19 @@ def init_db():
                 ("wattoo", "Mohsan Raza Wattoo", hashed, "admin")
             )
             conn.commit()
+
+def log_job(printer_id: int, printer_name: str, status: str, reason: str = ""):
+    with get_db() as conn:
+        conn.execute(
+            "INSERT INTO print_logs (printer_id, printer_name, status, reason) VALUES (?, ?, ?, ?)",
+            (printer_id, printer_name, status, reason)
+        )
+        conn.commit()
+
+def cleanup_logs():
+    with get_db() as conn:
+        conn.execute("DELETE FROM print_logs WHERE timestamp < datetime('now', '-24 hours')")
+        conn.commit()
 
 
 def get_settings() -> dict:
@@ -493,16 +518,14 @@ def master_settings():
     return render_template("settings.html", settings=settings)
 
 
-@app.route("/sync", methods=["POST"])
+@app.route("/logs")
 @login_required
 @admin_required
-def sync_printers():
-    success, message = sync_printers_from_odoo()
-    if success:
-        flash(message, "success")
-    else:
-        flash(message, "error")
-    return redirect(url_for("index"))
+def logs():
+    cleanup_logs()
+    with get_db() as conn:
+        logs = conn.execute("SELECT * FROM print_logs ORDER BY timestamp DESC").fetchall()
+    return render_template("logs.html", logs=logs)
 
 
 # ---------------------------------------------------------------------------

@@ -14,6 +14,7 @@
         <a href="{{ url_for('users_management') }}">User Management</a>
         <a href="{{ url_for('master_settings') }}">Configuration</a>
         <a href="{{ url_for('updates') }}">Updates</a>
+        <a href="{{ url_for('logs') }}">Print Logs</a>
         <form id="sync-form" action="{{ url_for('sync_printers') }}" method="post" style="display:none;"></form>
         <a href="#" onclick="document.getElementById('sync-form').submit(); return false;">Sync from Odoo</a>
       </div>

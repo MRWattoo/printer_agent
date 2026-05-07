@@ -1,18 +1,32 @@
 """
 print_agent.py
-Manages one polling thread per printer. Each thread continuously fetches
-print jobs from the configured source URL and sends them to the IP printer.
-
-Job confirmation policy:
-  - A job is confirmed (marked done on the server) ONLY when the printer
-    acknowledges the full print without any error.
-  - Any failure — printer unreachable, timeout, paper-out / hardware error,
-    or any other exception — leaves the job unconfirmed so the server keeps
-    it in the pending list and the next poll will re-fetch and retry it.
 """
 
 import base64
 import datetime
+import logging
+import socket
+import threading
+import sqlite3
+import requests
+from io import BytesIO
+from PIL import Image
+
+# Assuming local path
+DB_PATH = "/var/lib/printer_app/printers.db"
+
+def log_job_internal(printer_id: int, printer_name: str, status: str, reason: str = ""):
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        conn.execute(
+            "INSERT INTO print_logs (printer_id, printer_name, status, reason) VALUES (?, ?, ?, ?)",
+            (printer_id, printer_name, status, reason)
+        )
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        logging.error("Failed to log job: %s", e)
+
 import logging
 import socket
 import threading
@@ -391,32 +405,24 @@ def poll_printer(printer: dict, settings: dict, stop_event: threading.Event):
                         confirmed = confirm_job(odoo_url, headers, job_id)
                         if confirmed:
                             logger.info("[%s] Job %s printed and confirmed", name, job_id)
+                            log_job_internal(printer["id"], name, "success")
                         else:
                             logger.warning(
                                 "[%s] Job %s printed but confirmation failed — "
                                 "server may re-queue it",
                                 name, job_id,
                             )
+                            log_job_internal(printer["id"], name, "failed", "Confirmation failed")
 
                     except PrinterNotReachableError as e:
-                        logger.error(
-                            "[%s] Job %s NOT confirmed — printer unreachable: %s. "
-                            "Will retry next poll.",
-                            name, job_id, e,
-                        )
+                        logger.error("[%s] Job %s NOT confirmed — printer unreachable: %s", name, job_id, e)
+                        log_job_internal(printer["id"], name, "failed", "Printer unreachable")
                     except PrinterHardwareError as e:
-                        logger.error(
-                            "[%s] Job %s NOT confirmed — printer hardware error "
-                            "(paper out / roll missing / device error): %s. "
-                            "Will retry next poll.",
-                            name, job_id, e,
-                        )
+                        logger.error("[%s] Job %s NOT confirmed — printer hardware error: %s", name, job_id, e)
+                        log_job_internal(printer["id"], name, "failed", str(e))
                     except Exception as e:
-                        logger.error(
-                            "[%s] Job %s NOT confirmed — unexpected print error: %s. "
-                            "Will retry next poll.",
-                            name, job_id, e,
-                        )
+                        logger.error("[%s] Job %s NOT confirmed — unexpected print error: %s", name, job_id, e)
+                        log_job_internal(printer["id"], name, "failed", str(e))
             else:
                 logger.warning("[%s] HTTP %s from source", name, response.status_code)
 
