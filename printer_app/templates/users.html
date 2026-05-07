@@ -5,26 +5,26 @@
   <div class="card">
     <h2>Add New User</h2>
     <form method="post">
-      <div class="form-group">
-        <label for="username">Username</label>
+      <div style="margin-bottom: 1rem;">
+        <label for="username" style="display:block; font-size:.85rem; font-weight:600; margin-bottom:.3rem;">Username</label>
         <input type="text" id="username" name="username" required style="width: 100%; padding: .5rem; border: 1px solid #ddd; border-radius: 4px;">
       </div>
-      <div class="form-group">
-        <label for="name">Full Name</label>
+      <div style="margin-bottom: 1rem;">
+        <label for="name" style="display:block; font-size:.85rem; font-weight:600; margin-bottom:.3rem;">Full Name</label>
         <input type="text" id="name" name="name" placeholder="e.g. John Doe" style="width: 100%; padding: .5rem; border: 1px solid #ddd; border-radius: 4px;">
       </div>
-      <div class="form-group">
-        <label for="password">Password</label>
+      <div style="margin-bottom: 1rem;">
+        <label for="password" style="display:block; font-size:.85rem; font-weight:600; margin-bottom:.3rem;">Password</label>
         <input type="password" id="password" name="password" required style="width: 100%; padding: .5rem; border: 1px solid #ddd; border-radius: 4px;">
       </div>
-      <div class="form-group">
-        <label for="role">Role</label>
+      <div style="margin-bottom: 1rem;">
+        <label for="role" style="display:block; font-size:.85rem; font-weight:600; margin-bottom:.3rem;">Role</label>
         <select id="role" name="role" style="width: 100%; padding: .5rem; border: 1px solid #ddd; border-radius: 4px;">
           <option value="user">User (Add/Archive Only)</option>
           <option value="admin">Admin (Full Access)</option>
         </select>
       </div>
-      <button type="submit" style="background: #0f3460; color: #fff; padding: .5rem 1rem; border-radius: 4px; border: none; cursor: pointer; font-weight: 600;">Create User</button>
+      <button type="submit" style="background: #0f3460; color: #fff; padding: .6rem 1.5rem; border-radius: 6px; border: none; cursor: pointer; font-weight: 600;">Create User</button>
     </form>
   </div>
 
@@ -33,10 +33,10 @@
     <table style="width: 100%; border-collapse: collapse; margin-top: 1rem;">
       <thead>
         <tr style="background: #16213e; color: #fff;">
-          <th style="padding: 1rem;">Username</th>
-          <th style="padding: 1rem;">Name</th>
-          <th style="padding: 1rem;">Role</th>
-          <th style="padding: 1rem;">Actions</th>
+          <th style="padding: 1rem; text-align: left;">Username</th>
+          <th style="padding: 1rem; text-align: left;">Name</th>
+          <th style="padding: 1rem; text-align: left;">Role</th>
+          <th style="padding: 1rem; text-align: left;">Actions</th>
         </tr>
       </thead>
       <tbody>

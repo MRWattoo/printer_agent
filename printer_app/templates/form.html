@@ -1,13 +1,16 @@
 {% extends "base_layout.html" %}
 {% block title %}{{ title }}{% endblock %}
+
 {% block content %}
+<main>
   <div class="card">
     <h2>{{ title }}</h2>
     <form method="post">
       <label for="name">Printer Name</label>
-      <input type="text" id="name" name="name" required placeholder="e.g. Counter-1 Receipt" value="{{ printer.name if printer else '' }}" />
+      <input type="text" id="name" name="name" required placeholder="e.g. Counter-1 Receipt" value="{{ printer.name if printer else '' }}" style="width:100%; padding:.5rem; margin-bottom:1rem; border:1px solid #ddd; border-radius:4px;">
+      
       <label for="ip">Printer IP Address</label>
-      <input type="text" id="ip" name="ip" required placeholder="e.g. 192.168.0.101" value="{{ printer.ip if printer else '' }}" />
+      <input type="text" id="ip" name="ip" required placeholder="e.g. 192.168.0.101" value="{{ printer.ip if printer else '' }}" style="width:100%; padding:.5rem; margin-bottom:1rem; border:1px solid #ddd; border-radius:4px;">
 
       {% if printer %}
       <div style="display: flex; align-items: center; gap: .75rem; margin-bottom: 1.5rem;">
@@ -24,4 +27,5 @@
       </div>
     </form>
   </div>
+</main>
 {% endblock %}
