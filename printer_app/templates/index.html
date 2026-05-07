@@ -215,15 +215,24 @@
       const res = await fetch('/api/status');
       if (res.status === 401 || res.redirected) { window.location.reload(); return; }
       const data = await res.json();
+      console.log("Status API data:", data);
       data.forEach(p => {
         const row = document.getElementById('row-' + p.id);
         if (!row) return;
+        
         const badgeCell = row.querySelector('td:nth-child(4)');
         if (badgeCell) badgeCell.innerHTML = !p.enabled ? '<span class="badge badge-disabled">Disabled</span>' : (p.running && p.connected ? '<span class="badge badge-running">Running</span>' : '<span class="badge badge-stopped">Failed</span>');
+        
         const connectivityCell = document.getElementById('connectivity-' + p.id);
         if (connectivityCell) connectivityCell.innerHTML = !p.enabled ? '<span class="badge badge-disabled">N/A</span>' : (p.connected ? '<span class="badge badge-connected">Connected</span>' : '<span class="badge badge-offline">Failed</span>');
+
+        const reasonCell = document.getElementById('reason-' + p.id);
+        if (reasonCell) {
+            console.log(`Setting reason for ${p.id}:`, p.reason);
+            reasonCell.textContent = p.reason || '';
+        }
       });
-    } catch(e) {}
+    } catch(e) { console.error("Error fetching status:", e); }
   }
   setInterval(refreshStatus, 5000);
   refreshStatus();
