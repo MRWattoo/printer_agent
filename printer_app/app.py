@@ -672,12 +672,16 @@ def test_print(printer_id: int):
     try:
         print_test(printer["ip"])
         flash(f"Test print sent successfully to {printer['name']}", "success")
+        log_job(printer_id, printer["name"], "success")
     except PrinterNotReachableError as e:
         flash(f"Test print failed - printer not reachable: {e}", "error")
+        log_job(printer_id, printer["name"], "failed", "Printer unreachable")
     except PrinterHardwareError as e:
         flash(f"Test print failed - hardware error: {e}", "error")
+        log_job(printer_id, printer["name"], "failed", str(e))
     except Exception as e:
         flash(f"Test print failed - unexpected error: {e}", "error")
+        log_job(printer_id, printer["name"], "failed", str(e))
 
     return redirect(url_for("index"))
 
