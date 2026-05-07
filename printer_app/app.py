@@ -656,7 +656,6 @@ def test_print(printer_id: int):
 # ---------------------------------------------------------------------------
 
 @app.route("/api/status")
-@login_required
 def api_status():
     printers = get_all_printers()
     return jsonify(

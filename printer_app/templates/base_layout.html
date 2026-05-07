@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{% block title %}Printer Manager{% endblock %} — Printer Manager</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><text y='22' font-size='20'>🖨️</text></svg>">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f0f2f5; color: #1a1a2e; min-height: 100vh; }
+    
+    header { background: #16213e; color: #fff; padding: 0.8rem 2rem; display: flex; align-items: center; justify-content: space-between; }
+    .header-left { display: flex; align-items: center; }
+    .header-title-group { display: flex; flex-direction: column; }
+    header h1 { font-size: 1.2rem; letter-spacing: .05em; line-height: 1.1; }
+    .app-version { font-size: 0.65rem; color: #9ca3af; margin-top: 0.2rem; }
+    
+    .menu-container { position: relative; display: inline-block; margin-left: 1.5rem; }
+    .menu-btn { font-size: 0.9rem; color: #cdd6f4; cursor: pointer; display: flex; align-items: center; gap: 0.5rem; padding: 0.4rem 0.8rem; border-radius: 6px; transition: background 0.2s; }
+    .menu-btn:hover { background: rgba(255,255,255,0.1); }
+    .menu-btn::after { content: '▾'; font-size: 0.8rem; }
+    .dropdown-content { display: none; position: absolute; right: 0; top: 100%; background-color: #fff; min-width: 180px; box-shadow: 0 8px 16px rgba(0,0,0,0.2); z-index: 100; border-radius: 6px; margin-top: 5px; overflow: hidden; }
+    .dropdown-content.show { display: block; }
+    .settings-menu .dropdown-content { left: 0; right: auto; }
+    .dropdown-content a { color: #1a1a2e; padding: 10px 16px; text-decoration: none; display: block; font-size: 0.85rem; transition: background 0.2s; }
+    .dropdown-content a:hover { background-color: #f0f2f5; }
+    .dropdown-content a:not(:last-child) { border-bottom: 1px solid #f0f2f5; }
+
+    .header-right { display: flex; align-items: center; }
+    main { max-width: 1100px; margin: 2rem auto; padding: 0 1rem; }
+    .card { background: #fff; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,.08); padding: 1.5rem; }
+    
+    {% block extra_styles %}{% endblock %}
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="header-left">
+    <a href="{{ url_for('index') }}" style="text-decoration:none; color:inherit;">
+      <div class="header-title-group">
+        <h1>&#128438; Printer Manager</h1>
+        <span class="app-version">Version {{ version }}</span>
+      </div>
+    </a>
+    {% if role == 'admin' %}
+    <div class="menu-container settings-menu">
+      <div class="menu-btn">Settings</div>
+      <div class="dropdown-content">
+        <a href="{{ url_for('users_management') }}">User Management</a>
+        <a href="{{ url_for('master_settings') }}">Configuration</a>
+        <a href="{{ url_for('updates') }}">Updates</a>
+        <form id="sync-form" action="{{ url_for('sync_printers') }}" method="post" style="display:none;"></form>
+        <a href="#" onclick="document.getElementById('sync-form').submit(); return false;">Sync from Odoo</a>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+  
+  <div class="header-right">
+    <div class="menu-container user-menu">
+      <div class="menu-btn">{{ display_name }} ({{ role }})</div>
+      <div class="dropdown-content">
+        <a href="{{ url_for('change_own_password') }}">Change Password</a>
+        <a href="{{ url_for('logout') }}">Logout</a>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main>
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      {% for category, message in messages %}
+        <div style="padding: 1rem; margin-bottom: 1rem; border-radius: 6px; background: {% if category == 'success' %}#d1fae5; color: #047857{% else %}#fee2e2; color: #b91c1c{% endif %}; text-align: center; font-weight: 500;">
+          {{ message }}
+        </div>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
+  
+  {% block content %}{% endblock %}
+</main>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.menu-btn').forEach(btn => {
+      btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        const content = this.nextElementSibling;
+        document.querySelectorAll('.dropdown-content').forEach(d => {
+          if (d !== content) d.classList.remove('show');
+        });
+        content.classList.toggle('show');
+      });
+    });
+    window.addEventListener('click', function() {
+      document.querySelectorAll('.dropdown-content').forEach(d => d.classList.remove('show'));
+    });
+  });
+  {% block extra_scripts %}{% endblock %}
+</script>
+</body>
+</html>

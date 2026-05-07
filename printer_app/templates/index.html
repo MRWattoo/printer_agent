@@ -1,106 +1,8 @@
-{% import 'header.html' as header %}
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Printer Manager</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><text y='22' font-size='20'>🖨️</text></svg>">
-  <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+{% extends "base_layout.html" %}
 
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      background: #f0f2f5;
-      color: #1a1a2e;
-      min-height: 100vh;
-    }
+{% block title %}Dashboard{% endblock %}
 
-    header {
-      background: #16213e;
-      color: #fff;
-      padding: 0.8rem 2rem;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-    
-    .header-left { display: flex; align-items: center; }
-    .header-title-group { display: flex; flex-direction: column; }
-    header h1 { font-size: 1.2rem; letter-spacing: .05em; line-height: 1.1; }
-    .app-version { font-size: 0.65rem; color: #9ca3af; margin-top: 0.2rem; }
-    
-    /* User Dropdown Styles */
-    .menu-container { position: relative; display: inline-block; margin-left: 1.5rem; }
-    .user-menu { margin-right: 0; }
-    .menu-btn { 
-      font-size: 0.9rem; 
-      color: #cdd6f4; 
-      cursor: pointer; 
-      display: flex; 
-      align-items: center; 
-      gap: 0.5rem;
-      padding: 0.4rem 0.8rem;
-      border-radius: 6px;
-      transition: background 0.2s;
-    }
-    .menu-btn:hover { background: rgba(255,255,255,0.1); }
-    .menu-btn::after { content: '▾'; font-size: 0.8rem; }
-    
-    .dropdown-content {
-      display: none;
-      position: absolute;
-      right: 0;
-      top: 100%;
-      background-color: #fff;
-      min-width: 180px;
-      box-shadow: 0 8px 16px rgba(0,0,0,0.2);
-      z-index: 100;
-      border-radius: 6px;
-      margin-top: 5px;
-      overflow: hidden;
-    }
-    .dropdown-content.show { display: block; }
-    .settings-menu .dropdown-content {
-      left: 0;
-      right: auto;
-    }
-    .dropdown-content a {
-      color: #1a1a2e;
-      padding: 10px 16px;
-      text-decoration: none;
-      display: block;
-      font-size: 0.85rem;
-      transition: background 0.2s;
-    }
-    .dropdown-content a:hover { background-color: #f0f2f5; }
-    .dropdown-content a:not(:last-child) { border-bottom: 1px solid #f0f2f5; }
-
-    .header-right { display: flex; align-items: center; }
-
-    /* Card buttons */
-    a.btn-add {
-      background: #0f3460;
-      color: #e94560;
-      border: 2px solid #e94560;
-      padding: .45rem 1.1rem;
-      border-radius: 6px;
-      text-decoration: none;
-      font-weight: 600;
-      font-size: 0.85rem;
-      transition: background .2s;
-    }
-    a.btn-add:hover { background: #e94560; color: #fff; }
-
-    main { max-width: 1100px; margin: 2rem auto; padding: 0 1rem; }
-
-    .card {
-      background: #fff;
-      border-radius: 10px;
-      box-shadow: 0 2px 8px rgba(0,0,0,.08);
-      overflow: hidden;
-    }
-
+{% block extra_styles %}
     table { width: 100%; border-collapse: collapse; }
     thead { background: #16213e; color: #cdd6f4; }
     thead th { padding: .85rem 1rem; text-align: left; font-size: .82rem; text-transform: uppercase; letter-spacing: .07em; }
@@ -109,13 +11,7 @@
     tbody tr:hover { background: #f7f8fc; }
     td { padding: .8rem 1rem; font-size: .9rem; vertical-align: middle; }
 
-    .badge {
-      display: inline-block;
-      padding: .25rem .65rem;
-      border-radius: 20px;
-      font-size: .75rem;
-      font-weight: 600;
-    }
+    .badge { display: inline-block; padding: .25rem .65rem; border-radius: 20px; font-size: .75rem; font-weight: 600; }
     .badge-running  { background: #d1fadf; color: #166534; }
     .badge-stopped  { background: #fee2e2; color: #991b1b; }
     .badge-disabled { background: #e5e7eb; color: #6b7280; }
@@ -123,99 +19,25 @@
     .badge-offline  { background: #fee2e2; color: #b91c1c; }
 
     .actions { display: flex; gap: .5rem; }
-    .btn {
-      padding: .35rem .8rem;
-      border-radius: 5px;
-      font-size: .8rem;
-      font-weight: 600;
-      cursor: pointer;
-      border: none;
-      text-decoration: none;
-      display: inline-block;
-      transition: opacity .15s;
-    }
+    .btn { padding: .35rem .8rem; border-radius: 5px; font-size: .8rem; font-weight: 600; cursor: pointer; border: none; text-decoration: none; display: inline-block; transition: opacity .15s; }
     .btn:hover { opacity: .82; }
     .btn-edit    { background: #dbeafe; color: #1d4ed8; }
     .btn-toggle  { background: #fef9c3; color: #854d0e; }
     .btn-delete  { background: #fee2e2; color: #b91c1c; }
     .btn-test    { background: #d1fae5; color: #047857; }
+    .btn-add { background: #0f3460; color: #e94560; border: 2px solid #e94560; padding: .45rem 1.1rem; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 0.85rem; transition: background .2s; }
+    .btn-add:hover { background: #e94560; color: #fff; }
 
-    .empty {
-      text-align: center;
-      padding: 3rem;
-      color: #9ca3af;
-    }
+    .empty { text-align: center; padding: 3rem; color: #9ca3af; }
+    .pagination-controls { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+    .page-size-selector select { padding: 0.3rem 0.5rem; border-radius: 4px; border: 1px solid #d1d5db; font-size: 0.9rem; }
+    .pagination-bar { display: flex; justify-content: center; align-items: center; gap: 0.5rem; margin-top: 1.5rem; }
+    .page-btn { padding: 0.4rem 0.8rem; border: 1px solid #d1d5db; border-radius: 4px; background: #fff; cursor: pointer; color: #374151; font-weight: 600; font-size: 0.85rem; transition: all 0.2s; }
+    .page-btn.active { background: #0f3460; color: #fff; border-color: #0f3460; }
+    .page-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+{% endblock %}
 
-    /* Pagination Styles */
-    .pagination-controls {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 1rem;
-    }
-    .page-size-selector label {
-      display: inline;
-      margin-right: 0.5rem;
-      color: #374151;
-    }
-    .page-size-selector select {
-      padding: 0.3rem 0.5rem;
-      border-radius: 4px;
-      border: 1px solid #d1d5db;
-      font-size: 0.9rem;
-    }
-    .pagination-bar {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      gap: 0.5rem;
-      margin-top: 1.5rem;
-    }
-    .page-btn {
-      padding: 0.4rem 0.8rem;
-      border: 1px solid #d1d5db;
-      border-radius: 4px;
-      background: #fff;
-      cursor: pointer;
-      color: #374151;
-      font-weight: 600;
-      font-size: 0.85rem;
-      transition: all 0.2s;
-    }
-    .page-btn:hover:not(:disabled) {
-      background: #f0f2f5;
-    }
-    .page-btn.active {
-      background: #0f3460;
-      color: #fff;
-      border-color: #0f3460;
-    }
-    .page-btn:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-    .page-ellipsis {
-      padding: 0.4rem 0.2rem;
-      color: #6b7280;
-    }
-
-    footer { text-align: center; margin: 2rem 0; color: #9ca3af; font-size: .8rem; }
-  </style>
-</head>
-<body>
-
-{{ header.render_header('Home', role, display_name, version) }}
-
-<main>
-  {% with messages = get_flashed_messages(with_categories=true) %}
-    {% if messages %}
-      {% for category, message in messages %}
-        <div style="padding: 1rem; margin-bottom: 1rem; border-radius: 6px; background: {% if category == 'success' %}#d1fae5; color: #047857{% else %}#fee2e2; color: #b91c1c{% endif %}; text-align: center; font-weight: 500;">
-          {{ message }}
-        </div>
-      {% endfor %}
-    {% endif %}
-  {% endwith %}
+{% block content %}
   <div class="card" style="padding: 1.5rem;">
     <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
       <div class="pagination-controls" style="margin-bottom: 0; {% if not printers %}visibility: hidden;{% endif %}">
@@ -297,11 +119,9 @@
     </div>
     {% endif %}
   </div>
-</main>
+{% endblock %}
 
-<footer>Printer Application &mdash; auto-refreshes status every 5 seconds</footer>
-
-<script>
+{% block extra_scripts %}
   // Pagination State
   let currentPage = 1;
   let rowsPerPage = 10;
@@ -321,7 +141,6 @@
         renderTable();
       });
     }
-    
     renderTable();
   }
 
@@ -330,22 +149,13 @@
     if (!table) return;
     const tbody = table.querySelector('tbody');
     const rows = Array.from(tbody.querySelectorAll('tr.printer-row'));
-    
     const totalPages = Math.ceil(rows.length / rowsPerPage);
-    
-    // Ensure current page is within bounds
     if (currentPage > totalPages) currentPage = Math.max(1, totalPages);
     if (currentPage < 1) currentPage = 1;
 
-    // Show/Hide rows
     rows.forEach((row, index) => {
-      if (index >= (currentPage - 1) * rowsPerPage && index < currentPage * rowsPerPage) {
-        row.style.display = '';
-      } else {
-        row.style.display = 'none';
-      }
+      row.style.display = (index >= (currentPage - 1) * rowsPerPage && index < currentPage * rowsPerPage) ? '' : 'none';
     });
-
     renderPaginationBar(totalPages);
   }
 
@@ -353,151 +163,67 @@
     const bar = document.getElementById('paginationBar');
     if (!bar) return;
     bar.innerHTML = '';
-
     if (totalPages <= 1) return;
 
-    // Prev Button
-    const prevBtn = document.createElement('button');
-    prevBtn.className = 'page-btn';
-    prevBtn.innerHTML = '&laquo; Prev';
-    prevBtn.disabled = currentPage === 1;
-    prevBtn.addEventListener('click', () => {
-      if (currentPage > 1) {
-        currentPage--;
-        renderTable();
-      }
-    });
+    const prevBtn = createBtn('&laquo; Prev', currentPage > 1, () => { currentPage--; renderTable(); });
     bar.appendChild(prevBtn);
 
-    // Numbered Buttons with Ellipsis logic
     let startPage = Math.max(1, currentPage - 2);
     let endPage = Math.min(totalPages, currentPage + 2);
-
-    if (currentPage <= 3) {
-      endPage = Math.min(totalPages, 5);
-    }
-    if (currentPage >= totalPages - 2) {
-      startPage = Math.max(1, totalPages - 4);
-    }
+    if (currentPage <= 3) endPage = Math.min(totalPages, 5);
+    if (currentPage >= totalPages - 2) startPage = Math.max(1, totalPages - 4);
 
     if (startPage > 1) {
       bar.appendChild(createPageBtn(1));
-      if (startPage > 2) {
-        const ellipsis = document.createElement('span');
-        ellipsis.className = 'page-ellipsis';
-        ellipsis.innerHTML = '&hellip;';
-        bar.appendChild(ellipsis);
-      }
+      if (startPage > 2) bar.appendChild(createEllipsis());
     }
-
-    for (let i = startPage; i <= endPage; i++) {
-      bar.appendChild(createPageBtn(i));
-    }
-
+    for (let i = startPage; i <= endPage; i++) bar.appendChild(createPageBtn(i));
     if (endPage < totalPages) {
-      if (endPage < totalPages - 1) {
-        const ellipsis = document.createElement('span');
-        ellipsis.className = 'page-ellipsis';
-        ellipsis.innerHTML = '&hellip;';
-        bar.appendChild(ellipsis);
-      }
+      if (endPage < totalPages - 1) bar.appendChild(createEllipsis());
       bar.appendChild(createPageBtn(totalPages));
     }
 
-    // Next Button
-    const nextBtn = document.createElement('button');
-    nextBtn.className = 'page-btn';
-    nextBtn.innerHTML = 'Next &raquo;';
-    nextBtn.disabled = currentPage === totalPages;
-    nextBtn.addEventListener('click', () => {
-      if (currentPage < totalPages) {
-        currentPage++;
-        renderTable();
-      }
-    });
+    const nextBtn = createBtn('Next &raquo;', currentPage < totalPages, () => { currentPage++; renderTable(); });
     bar.appendChild(nextBtn);
   }
 
-  function createPageBtn(pageNumber) {
+  function createBtn(text, enabled, handler) {
     const btn = document.createElement('button');
     btn.className = 'page-btn';
-    if (pageNumber === currentPage) {
-      btn.classList.add('active');
-    }
-    btn.textContent = pageNumber;
-    btn.addEventListener('click', () => {
-      currentPage = pageNumber;
-      renderTable();
-    });
+    btn.innerHTML = text;
+    btn.disabled = !enabled;
+    if (enabled) btn.addEventListener('click', handler);
     return btn;
   }
+  function createPageBtn(p) {
+    const btn = createBtn(p, true, () => { currentPage = p; renderTable(); });
+    if (p === currentPage) btn.classList.add('active');
+    return btn;
+  }
+  function createEllipsis() {
+    const span = document.createElement('span');
+    span.className = 'page-ellipsis';
+    span.innerHTML = '&hellip;';
+    return span;
+  }
   
-  document.addEventListener('DOMContentLoaded', function() {
-    initPagination();
-    
-    // Dropdown click handlers for header macros
-    document.querySelectorAll('.menu-btn').forEach(btn => {
-      btn.addEventListener('click', function(e) {
-        e.stopPropagation();
-        const content = this.nextElementSibling;
-        document.querySelectorAll('.dropdown-content').forEach(d => {
-          if (d !== content) d.classList.remove('show');
-        });
-        content.classList.toggle('show');
-      });
-    });
-
-    // Close on outside click
-    window.addEventListener('click', function() {
-      document.querySelectorAll('.dropdown-content').forEach(d => d.classList.remove('show'));
-    });
-  });
+  document.addEventListener('DOMContentLoaded', initPagination);
 
   async function refreshStatus() {
     try {
       const res = await fetch('/api/status');
-      if (res.status === 401 || res.redirected) {
-          window.location.reload(); // Redirect to login if session expired
-          return;
-      }
+      if (res.status === 401 || res.redirected) { window.location.reload(); return; }
       const data = await res.json();
       data.forEach(p => {
         const row = document.getElementById('row-' + p.id);
         if (!row) return;
-        
-        // Update status badge (column 4)
         const badgeCell = row.querySelector('td:nth-child(4)');
-        if (badgeCell) {
-          let html;
-          if (!p.enabled) {
-            html = '<span class="badge badge-disabled">Disabled</span>';
-          } else if (p.running && p.connected) {
-            html = '<span class="badge badge-running">Running</span>';
-          } else {
-            html = '<span class="badge badge-stopped">Failed</span>';
-          }
-          badgeCell.innerHTML = html;
-        }
-        
-        // Update connectivity badge (column 5)
+        if (badgeCell) badgeCell.innerHTML = !p.enabled ? '<span class="badge badge-disabled">Disabled</span>' : (p.running && p.connected ? '<span class="badge badge-running">Running</span>' : '<span class="badge badge-stopped">Failed</span>');
         const connectivityCell = document.getElementById('connectivity-' + p.id);
-        if (connectivityCell) {
-          let html;
-          if (!p.enabled) {
-            html = '<span class="badge badge-disabled">N/A</span>';
-          } else if (p.connected) {
-            html = '<span class="badge badge-connected">Connected</span>';
-          } else {
-            html = '<span class="badge badge-offline">Failed</span>';
-          }
-          connectivityCell.innerHTML = html;
-        }
+        if (connectivityCell) connectivityCell.innerHTML = !p.enabled ? '<span class="badge badge-disabled">N/A</span>' : (p.connected ? '<span class="badge badge-connected">Connected</span>' : '<span class="badge badge-offline">Failed</span>');
       });
-    } catch(e) { /* silently ignore */ }
+    } catch(e) {}
   }
   setInterval(refreshStatus, 5000);
-  refreshStatus(); // Initial check on page load
-</script>
-
-</body>
-</html>
+  refreshStatus();
+{% endblock %}
