@@ -691,15 +691,22 @@ def api_status():
     printers = get_all_printers()
     # Fetch last failure reason for each printer
     with get_db() as conn:
+        # Get the most recent reason for each printer_id that failed
         last_logs = conn.execute(
             """
-            SELECT printer_id, reason FROM print_logs 
+            SELECT printer_id, reason 
+            FROM print_logs 
             WHERE status='failed' 
-            GROUP BY printer_id 
-            HAVING MAX(timestamp)
+            AND id IN (
+                SELECT MAX(id) 
+                FROM print_logs 
+                WHERE status='failed' 
+                GROUP BY printer_id
+            )
             """
         ).fetchall()
         reasons = {log['printer_id']: log['reason'] for log in last_logs}
+        logging.debug(f"Retrieved reasons: {reasons}")
 
     return jsonify(
         [

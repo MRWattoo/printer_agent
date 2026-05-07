@@ -17,6 +17,7 @@ DB_PATH = "/var/lib/printer_app/printers.db"
 
 def log_job_internal(printer_id: int, printer_name: str, status: str, reason: str = ""):
     try:
+        logging.info(f"Logging job: Printer={printer_name}, Status={status}, Reason={reason}")
         conn = sqlite3.connect(DB_PATH)
         conn.execute(
             "INSERT INTO print_logs (printer_id, printer_name, status, reason) VALUES (?, ?, ?, ?)",
