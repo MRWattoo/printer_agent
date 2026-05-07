@@ -21,8 +21,25 @@ err()  { echo "[ERROR] $*" >&2; exit 1; }
 
 [[ $EUID -eq 0 ]] || err "update.sh must be run as root"
 
+FORCE=0
+if [[ "${1:-}" == "--force" ]]; then
+    FORCE=1
+fi
+
+if [[ $FORCE -eq 0 ]]; then
+    DB_PATH="/var/lib/printer_app/printers.db"
+    if [[ -f "$DB_PATH" ]]; then
+        AUTO_UPDATE=$(sqlite3 "$DB_PATH" "SELECT auto_update FROM settings WHERE id=1;" 2>/dev/null || echo "1")
+        if [[ "$AUTO_UPDATE" == "0" ]]; then
+            info "Auto-update is disabled in settings. Skipping update. (Use --force to override)"
+            exit 0
+        fi
+    fi
+fi
+
 # --------------------------------------------------------------------------- #
 # 1. Pull latest source
+
 # --------------------------------------------------------------------------- #
 info "Fetching latest source from GitHub..."
 git -C "$SRC_DIR" fetch --quiet origin "$GITHUB_BRANCH"

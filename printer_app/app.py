@@ -103,19 +103,14 @@ def init_db():
                 odoo_url     TEXT    NOT NULL DEFAULT '',
                 api_key      TEXT    NOT NULL DEFAULT '',
                 company_id   INTEGER NOT NULL DEFAULT 1,
-                allowed_ip   TEXT    NOT NULL DEFAULT ''
+                auto_update  INTEGER NOT NULL DEFAULT 1
             )
             """
         )
-        # Migration: Add allowed_ip column if it doesn't exist
-        try:
-            conn.execute("ALTER TABLE settings ADD COLUMN allowed_ip TEXT NOT NULL DEFAULT ''")
-        except sqlite3.OperationalError:
-            pass
-
+        # Migration: Drop allowed_ip if it exists (not trivial in SQLite, so we'll just ignore it)
         # Ensure initial row exists
         if not conn.execute("SELECT 1 FROM settings WHERE id=1").fetchone():
-            conn.execute("INSERT INTO settings (id, odoo_url, api_key, company_id, allowed_ip) VALUES (1, '', '', 1, '')")
+            conn.execute("INSERT INTO settings (id, odoo_url, api_key, company_id, auto_update) VALUES (1, '', '', 1, 1)")
 
         # 2. Printers table (Simplified)
         # Note: We keep odoo_url, api_key, company_id for backward compatibility 
@@ -197,14 +192,14 @@ def init_db():
 def get_settings() -> dict:
     with get_db() as conn:
         row = conn.execute("SELECT * FROM settings WHERE id=1").fetchone()
-    return dict(row) if row else {"odoo_url": "", "api_key": "", "company_id": 1, "allowed_ip": ""}
+    return dict(row) if row else {"odoo_url": "", "api_key": "", "company_id": 1, "auto_update": 1}
 
 
-def update_settings(odoo_url: str, api_key: str, company_id: int, allowed_ip: str):
+def update_settings(odoo_url: str, api_key: str, company_id: int, auto_update: int = 1):
     with get_db() as conn:
         conn.execute(
-            "UPDATE settings SET odoo_url=?, api_key=?, company_id=?, allowed_ip=? WHERE id=1",
-            (odoo_url, api_key, company_id, allowed_ip)
+            "UPDATE settings SET odoo_url=?, api_key=?, company_id=?, auto_update=? WHERE id=1",
+            (odoo_url, api_key, company_id, auto_update)
         )
         conn.commit()
 
@@ -433,41 +428,43 @@ def sync_printers_from_odoo():
         return False, f"Sync failed: {str(e)}"
 
 
-@app.before_request
-def restrict_ip():
+@app.route("/updates", methods=["GET", "POST"])
+@login_required
+@admin_required
+def updates():
+    if request.method == "POST":
+        if request.form.get("manual_update"):
+            # Trigger update script
+            try:
+                import subprocess
+                subprocess.run(["sudo", "/opt/printer_application/update.sh"], check=True)
+                flash("Update initiated successfully.", "success")
+            except Exception as e:
+                flash(f"Update failed: {str(e)}", "error")
+        else:
+            # Save auto-update setting
+            auto_update = 1 if request.form.get("auto_update") else 0
+            settings = get_settings()
+            update_settings(settings['odoo_url'], settings['api_key'], settings['company_id'], auto_update)
+            flash("Settings saved.", "success")
+        return redirect(url_for("updates"))
+
     settings = get_settings()
-    allowed = settings.get("allowed_ip")
-    if allowed and allowed.strip():
-        # Allow static files and the login page so users can actually log in 
-        # (or at least see why they are blocked if we add a custom page)
-        if request.endpoint not in ('login', 'static', 'api_status'):
-            client_ip = request.remote_addr
-            # Handle X-Forwarded-For if behind a proxy
-            forwarded = request.headers.get("X-Forwarded-For")
-            if forwarded:
-                client_ip = forwarded.split(",")[0].strip()
-            
-            if client_ip != allowed.strip():
-                from flask import abort
-                logging.warning("Blocked access attempt from unauthorized IP: %s", client_ip)
-                abort(403, description=f"Access denied from IP: {client_ip}")
-
-
-# ---------------------------------------------------------------------------
-# Routes — Master Configuration
-# ---------------------------------------------------------------------------
+    # Simple check for latest version (mocked as versioning logic is minimal)
+    return render_template("updates.html", settings=settings, latest_version=__version__)
 
 @app.route("/settings", methods=["GET", "POST"])
 @login_required
 @admin_required
 def master_settings():
+    settings = get_settings()
     if request.method == "POST":
         odoo_url = request.form.get("odoo_url", "").strip()
         api_key = request.form.get("api_key", "").strip()
         company_id = int(request.form.get("company_id", 1))
         allowed_ip = request.form.get("allowed_ip", "").strip()
 
-        update_settings(odoo_url, api_key, company_id, allowed_ip)
+        update_settings(odoo_url, api_key, company_id, allowed_ip, settings.get("auto_update", 1))
         
         # Restart all enabled printers to apply new settings
         settings = get_settings()
@@ -478,7 +475,6 @@ def master_settings():
         flash("Global settings updated and printers restarted.", "success")
         return redirect(url_for("index"))
 
-    settings = get_settings()
     return render_template("settings.html", settings=settings)
 
 

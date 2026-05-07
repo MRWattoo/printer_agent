@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Updates - Printer Manager</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f0f2f5; color: #1a1a2e; min-height: 100vh; }
+    header { background: #16213e; color: #fff; padding: 0.8rem 2rem; display: flex; align-items: center; justify-content: space-between; }
+    .header-left { display: flex; align-items: center; }
+    .header-title-group { display: flex; flex-direction: column; }
+    header h1 { font-size: 1.2rem; letter-spacing: .05em; line-height: 1.1; }
+    .app-version { font-size: 0.65rem; color: #9ca3af; margin-top: 0.2rem; }
+    main { max-width: 800px; margin: 2rem auto; padding: 0 1rem; }
+    .card { background: #fff; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,.08); padding: 2rem; }
+    .card h2 { margin-bottom: 1.5rem; }
+    .info-box { background: #f9fafb; padding: 1rem; border-radius: 6px; margin-bottom: 1.5rem; }
+    .btn-row { display: flex; gap: 1rem; align-items: center; margin-top: 1rem; }
+    button { padding: 0.6rem 1.2rem; border-radius: 6px; border: none; cursor: pointer; font-weight: 600; }
+    .btn-primary { background: #0f3460; color: #fff; }
+    .btn-primary:disabled { background: #9ca3af; }
+    .toggle { display: flex; align-items: center; gap: 0.5rem; }
+  </style>
+</head>
+<body>
+<header>
+  <div class="header-left">
+    <div class="header-title-group">
+      <h1>&#128438; Printer Manager</h1>
+      <span class="app-version">Version {{ version }}</span>
+    </div>
+  </div>
+</header>
+<main>
+  <div class="card">
+    <h2>Update Management</h2>
+    <div class="info-box">
+      <p><strong>Current Version:</strong> {{ version }}</p>
+      <p><strong>Latest Version:</strong> {{ latest_version }}</p>
+    </div>
+    <form method="post">
+      <div class="toggle">
+        <input type="checkbox" name="auto_update" id="auto_update" {% if settings.auto_update %}checked{% endif %}>
+        <label for="auto_update">Enable Auto-Update (24h background check)</label>
+      </div>
+      <div class="btn-row">
+        <button type="submit" class="btn-primary">Save Settings</button>
+        <button type="submit" name="manual_update" value="1" class="btn-primary" 
+                {% if settings.auto_update %}disabled{% endif %}>Update Now</button>
+      </div>
+    </form>
+  </div>
+</main>
+</body>
+</html>
