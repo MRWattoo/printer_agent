@@ -291,35 +291,17 @@ def print_receipt(printer_ip: str, img_data: str) -> None:
         # Ensure all data is sent before cutting
         printer.cut(mode='full')
     except (socket.timeout, socket.error, OSError) as exc:
-        # Network disappeared mid-print (e.g. printer powered off or paper jam
-        # caused the printer to close the connection).
+        # Network disappeared mid-print
         raise PrinterNotReachableError(
             f"Lost connection to printer {printer_ip} during print: {exc}"
         ) from exc
-    except Exception as exc:
-        # Covers escpos internal errors, status-check errors (paper out, etc.)
-        error_msg = str(exc).lower()
-        
-        # We only treat it as a warning if it contains 'near' or 'low'.
-        # If it says 'out', 'empty', or 'end' without 'near', it's a hard error.
-        if "near" in error_msg or "low" in error_msg:
-             logger.warning("[%s] Printer reported a non-fatal warning during print: %s", printer_ip, exc)
-             return
-
-        if any(kw in error_msg for kw in ("paper", "cover", "status", "error", "roll")):
-            raise PrinterHardwareError(
-                f"Printer {printer_ip} hardware error: {exc}"
-            ) from exc
-        raise PrinterHardwareError(
-            f"Printer {printer_ip} unexpected error: {exc}"
-        ) from exc
-
-
+    # Removing the catch-all 'except Exception' block that was causing 
+    # false-positive PrinterHardwareErrors on successful prints.
     finally:
         try:
             printer.close()
         except Exception:
-            pass  # ignore close errors — the print result is already determined
+            pass
 
 
 
