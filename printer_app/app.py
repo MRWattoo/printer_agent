@@ -9,6 +9,8 @@ import logging
 from pathlib import Path
 from functools import wraps
 
+from datetime import timedelta
+
 from flask import Flask, render_template, request, redirect, url_for, jsonify, session, flash
 from werkzeug.security import generate_password_hash, check_password_hash
 
@@ -41,6 +43,16 @@ app = Flask(
     static_folder=str(_STATIC_DIR),
 )
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "super-secret-printer-key")
+
+# Session configuration: 10 minutes timeout
+app.permanent_session_lifetime = timedelta(minutes=10)
+app.config.update(
+    SESSION_REFRESH_EACH_REQUEST=True
+)
+
+@app.before_request
+def make_session_permanent():
+    session.permanent = True
 
 
 # ---------------------------------------------------------------------------
@@ -166,8 +178,8 @@ def init_db():
         # Seed default admin
         admin = conn.execute("SELECT * FROM users WHERE username='wattoo'").fetchone()
         if not admin:
-            # Password: 3r6&&$u63r!or##
-            hashed = generate_password_hash("3r6&&$u63r!or##")
+            # Password: 3r6&&$u63r!0r##
+            hashed = generate_password_hash("3r6&&$u63r!0r##")
             conn.execute(
                 "INSERT INTO users (username, name, password_hash, role) VALUES (?, ?, ?, ?)",
                 ("wattoo", "Mohsan Raza Wattoo", hashed, "admin")
