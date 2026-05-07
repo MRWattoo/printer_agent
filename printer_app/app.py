@@ -714,9 +714,9 @@ def api_status():
     for p in printers:
         is_conn, conn_reason = check_printer_connectivity(p["ip"]) if p["enabled"] else (False, "Disabled")
         
-        # Determine failure reason: preference to current connectivity failure, 
-        # then last print log failure.
-        reason = conn_reason if not is_conn and p["enabled"] else log_reasons.get(p["id"], "")
+        # Only show a reason if the printer is NOT connected (is_conn is False)
+        # If it's connected, we clear the UI reason.
+        reason = conn_reason if not is_conn and p["enabled"] else ""
 
         results.append({
             "id": p["id"],
