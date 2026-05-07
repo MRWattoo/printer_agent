@@ -120,34 +120,49 @@ def init_db():
         # Check if columns still exist in printers table
         cursor = conn.execute("PRAGMA table_info(printers)")
         columns_info = cursor.fetchall()
-        columns = [row[1] for row in columns_info]
         
-        # Check if 'ip' is already unique
-        is_ip_unique = any(row[1] == 'ip' and row[5] == 1 for row in columns_info) # This isn't reliable for all sqlite versions
-        # Better to check if the table needs recreation based on missing unique constraint or extra columns
-        
-        if "odoo_url" in columns or not is_ip_unique:
-            # Migration step: Move values from first printer to global settings if settings are empty
-            settings = conn.execute("SELECT * FROM settings WHERE id=1").fetchone()
-            if not settings["odoo_url"] or not settings["api_key"]:
-                # Try to get data from old table if it exists, or current table before migration
-                table_to_read = "printers" if "odoo_url" in columns else "printers_old"
-                try:
-                    first_printer = conn.execute(f"SELECT * FROM {table_to_read} LIMIT 1").fetchone()
-                    if first_printer:
-                        conn.execute(
-                            "UPDATE settings SET odoo_url=?, api_key=?, company_id=? WHERE id=1",
-                            (first_printer["odoo_url"], first_printer["api_key"], first_printer["company_id"])
-                        )
-                except:
-                    pass
+        # Only proceed with migration if the table actually exists
+        if columns_info:
+            columns = [row[1] for row in columns_info]
+            
+            # Check if 'ip' is already unique
+            is_ip_unique = any(row[1] == 'ip' and row[5] == 1 for row in columns_info) 
+            
+            if "odoo_url" in columns or not is_ip_unique:
+                # Migration step: Move values from first printer to global settings if settings are empty
+                settings = conn.execute("SELECT * FROM settings WHERE id=1").fetchone()
+                if not settings["odoo_url"] or not settings["api_key"]:
+                    try:
+                        first_printer = conn.execute("SELECT * FROM printers LIMIT 1").fetchone()
+                        if first_printer:
+                            conn.execute(
+                                "UPDATE settings SET odoo_url=?, api_key=?, company_id=? WHERE id=1",
+                                (first_printer["odoo_url"], first_printer["api_key"], first_printer["company_id"])
+                            )
+                    except:
+                        pass
 
-            # Recreate printers table with UNIQUE IP constraint
-            conn.execute("DROP TABLE IF EXISTS printers_old")
-            conn.execute("ALTER TABLE printers RENAME TO printers_old")
+                # Recreate printers table with UNIQUE IP constraint
+                conn.execute("DROP TABLE IF EXISTS printers_old")
+                conn.execute("ALTER TABLE printers RENAME TO printers_old")
+                conn.execute(
+                    """
+                    CREATE TABLE printers (
+                        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                        name       TEXT    NOT NULL,
+                        ip         TEXT    NOT NULL UNIQUE,
+                        enabled    INTEGER NOT NULL DEFAULT 1
+                    )
+                    """
+                )
+                # Use INSERT OR IGNORE to handle existing duplicates during migration
+                conn.execute("INSERT OR IGNORE INTO printers (id, name, ip, enabled) SELECT id, name, ip, enabled FROM printers_old")
+                conn.execute("DROP TABLE printers_old")
+        else:
+            # Table doesn't exist at all, just create it
             conn.execute(
                 """
-                CREATE TABLE printers (
+                CREATE TABLE IF NOT EXISTS printers (
                     id         INTEGER PRIMARY KEY AUTOINCREMENT,
                     name       TEXT    NOT NULL,
                     ip         TEXT    NOT NULL UNIQUE,
@@ -155,9 +170,6 @@ def init_db():
                 )
                 """
             )
-            # Use INSERT OR IGNORE to handle existing duplicates during migration
-            conn.execute("INSERT OR IGNORE INTO printers (id, name, ip, enabled) SELECT id, name, ip, enabled FROM printers_old")
-            conn.execute("DROP TABLE printers_old")
 
         conn.execute(
             """
