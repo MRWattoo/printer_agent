@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>{{ title }} — Printer Manager</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><text y='22' font-size='20'>🖨️</text></svg>">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -92,10 +93,12 @@
 <body>
 
 <header>
-  <div class="header-title-group">
-    <h1>&#128438; Printer Manager — {{ title }}</h1>
-    <span class="app-version">Version {{ version }}</span>
-  </div>
+  <a href="{{ url_for('index') }}" style="text-decoration:none; color:inherit;">
+    <div class="header-title-group">
+      <h1>&#128438; Printer Manager — {{ title }}</h1>
+      <span class="app-version">Version {{ version }}</span>
+    </div>
+  </a>
 </header>
 
 <main>

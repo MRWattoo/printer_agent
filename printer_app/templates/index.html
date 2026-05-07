@@ -29,7 +29,7 @@
     header h1 { font-size: 1.2rem; letter-spacing: .05em; line-height: 1.1; }
     .app-version { font-size: 0.65rem; color: #9ca3af; margin-top: 0.2rem; }
     
-    /* Menu Styles */
+    /* User Dropdown Styles */
     .menu-container { position: relative; display: inline-block; margin-left: 1.5rem; }
     .user-menu { margin-right: 0; }
     .menu-btn { 
@@ -59,6 +59,7 @@
       margin-top: 5px;
       overflow: hidden;
     }
+    .dropdown-content.show { display: block; }
     .settings-menu .dropdown-content {
       left: 0;
       right: auto;
@@ -73,7 +74,6 @@
     }
     .dropdown-content a:hover { background-color: #f0f2f5; }
     .dropdown-content a:not(:last-child) { border-bottom: 1px solid #f0f2f5; }
-    .menu-container:hover .dropdown-content { display: block; }
 
     .header-right { display: flex; align-items: center; }
 
@@ -205,10 +205,12 @@
 
 <header>
   <div class="header-left">
-    <div class="header-title-group">
-      <h1>&#128438; Printer Manager</h1>
-      <span class="app-version">Version {{ version }}</span>
-    </div>
+    <a href="{{ url_for('index') }}" style="text-decoration:none; color:inherit;">
+      <div class="header-title-group">
+        <h1>&#128438; Printer Manager</h1>
+        <span class="app-version">Version {{ version }}</span>
+      </div>
+    </a>
     {% if role == 'admin' %}
     <div class="menu-container settings-menu">
       <div class="menu-btn">Settings</div>
@@ -462,7 +464,26 @@
     return btn;
   }
   
-  document.addEventListener('DOMContentLoaded', initPagination);
+  document.addEventListener('DOMContentLoaded', function() {
+    initPagination();
+    
+    // Dropdown click handlers
+    document.querySelectorAll('.menu-btn').forEach(btn => {
+      btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        const content = this.nextElementSibling;
+        document.querySelectorAll('.dropdown-content').forEach(d => {
+          if (d !== content) d.classList.remove('show');
+        });
+        content.classList.toggle('show');
+      });
+    });
+
+    // Close on outside click
+    window.addEventListener('click', function() {
+      document.querySelectorAll('.dropdown-content').forEach(d => d.classList.remove('show'));
+    });
+  });
 
   async function refreshStatus() {
     try {

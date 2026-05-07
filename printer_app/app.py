@@ -462,7 +462,6 @@ def updates():
         return redirect(url_for("updates"))
 
     settings = get_settings()
-    # Simple check for latest version (mocked as versioning logic is minimal)
     return render_template("updates.html", settings=settings, latest_version=__version__)
 
 @app.route("/settings", methods=["GET", "POST"])
