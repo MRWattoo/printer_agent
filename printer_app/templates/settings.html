@@ -91,16 +91,18 @@
 </head>
 <body>
 
-<header>
-  <a href="{{ url_for('index') }}" style="text-decoration:none; color:inherit;">
-    <div class="header-title-group">
-      <h1>&#128438; Printer Manager — Master Settings</h1>
-      <span class="app-version">Version {{ version }}</span>
-    </div>
-  </a>
-</header>
+{{ header.render_header('Master Settings', role, display_name, version) }}
 
 <main>
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      {% for category, message in messages %}
+        <div style="padding: 1rem; margin-bottom: 1rem; border-radius: 6px; background: {% if category == 'success' %}#d1fae5; color: #047857{% else %}#fee2e2; color: #b91c1c{% endif %}; text-align: center; font-weight: 500;">
+          {{ message }}
+        </div>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
   <div class="card">
     <h2>Master Configuration</h2>
     <p class="help-text">These settings apply to all configured printers.</p>
@@ -122,12 +124,6 @@
              min="1"
              value="{{ settings.company_id }}" />
 
-      <label for="allowed_ip">Allowed Client IP Address (Restricts Web UI Access)</label>
-      <input type="text" id="allowed_ip" name="allowed_ip"
-             placeholder="e.g. 192.168.1.50 (leave empty to allow all)"
-             value="{{ settings.allowed_ip }}" />
-      <p class="help-text">If set, only this IP will be able to access the application UI. Leave blank to disable this restriction.</p>
-
       <div class="btn-row">
         <button type="submit">Save Settings</button>
         <a href="{{ url_for('index') }}" class="btn-cancel">Cancel</a>
@@ -136,5 +132,23 @@
   </div>
 </main>
 
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.menu-btn').forEach(btn => {
+      btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        const content = this.nextElementSibling;
+        document.querySelectorAll('.dropdown-content').forEach(d => {
+          if (d !== content) d.classList.remove('show');
+        });
+        content.classList.toggle('show');
+      });
+    });
+    window.addEventListener('click', function() {
+      document.querySelectorAll('.dropdown-content').forEach(d => d.classList.remove('show'));
+    });
+  });
+</script>
 </body>
 </html>
+
