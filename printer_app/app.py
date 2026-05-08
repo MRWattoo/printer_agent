@@ -425,41 +425,34 @@ def sync_printers_from_odoo():
     try:
         import requests
         url = f"{settings['odoo_url'].rstrip('/')}/odoo_pos/printers"
+        logging.info(f"Syncing from URL: {url}")
         headers = {"Authorization": f"Bearer {settings['api_key']}"}
-        # Odoo route expects JSON for auth='none' type='json'
         resp = requests.post(
             url, 
-            json={"params": {"company_id": settings["company_id"]}}, 
+            json={"jsonrpc": "2.0", "method": "call", "params": {"company_id": settings["company_id"]}, "id": 1}, 
             headers=headers, 
             timeout=10
         )
-        
+        logging.info(f"Sync response code: {resp.status_code}")
         if resp.status_code == 200:
             data = resp.json()
             if "error" in data:
                 return False, f"Odoo Error: {data['error'].get('message', 'Unknown error')}"
-            
             result_wrapper = data.get("result", {})
             if result_wrapper.get("status") != "success":
                 return False, f"Odoo API Error: {result_wrapper.get('error', 'Unknown')}"
-            
             printers_data = result_wrapper.get("result", [])
-            
             with get_db() as conn:
                 existing = {p["ip"]: p["id"] for p in get_all_printers()}
-                
                 for p_data in printers_data:
                     name = p_data.get("name")
                     ip = p_data.get("ip")
                     if not ip: continue
-                    
                     if ip in existing:
                         conn.execute("UPDATE printers SET name=? WHERE ip=?", (name, ip))
                     else:
                         conn.execute("INSERT INTO printers (name, ip, enabled) VALUES (?, ?, 1)", (name, ip))
                 conn.commit()
-            
-            # Restart all enabled printers to ensure they use latest settings
             start_all_enabled()
             return True, f"Successfully synced {len(printers_data)} printers from Odoo"
         else:
@@ -737,8 +730,11 @@ def api_status():
 
 def start_all_enabled():
     settings = get_settings()
-    for p in get_all_printers():
+    printers = get_all_printers()
+    logging.error(f"DEBUG: start_all_enabled: Found {len(printers)} printers. Settings: {settings}")
+    for p in printers:
         if p["enabled"]:
+            logging.error(f"DEBUG: Checking printer: {p}. Enabled: {p.get("enabled")}")
             agent_manager.start(p, settings)
 
 

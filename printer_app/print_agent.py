@@ -355,22 +355,25 @@ def poll_printer(printer: dict, settings: dict, stop_event: threading.Event):
     headers = {"Authorization": f"Bearer {settings['api_key']}"}
     company_id = settings["company_id"]
 
-    logger.info("[%s] Polling thread started (IP=%s)", name, ip)
+    logging.error(f"DEBUG: poll_printer entry point: name={name}, ip={ip}")
+    logger.info("[%s] Configuration: URL=%s, Key=%s, Company=%s", name, odoo_url, settings.get('api_key', 'N/A')[:5]+'...', company_id)
 
-    if not odoo_url or not settings['api_key']:
-        logger.error("[%s] Source URL or API Key not configured. Polling suspended.", name)
+    if not odoo_url or not settings.get('api_key'):
+        logger.error("[%s] Source URL or API Key not configured. Polling suspended. Settings: %s", name, settings)
         while not stop_event.is_set():
             stop_event.wait(60)
         return
 
     while not stop_event.is_set():
         try:
+            logger.debug("[%s] Requesting jobs from %s", name, odoo_url)
             response = requests.get(
                 f"{odoo_url}/odoo_pos/jobs",
                 json={"printer_ip": ip, "company_id": company_id},
                 headers=headers,
                 timeout=10,
             )
+            logger.debug("[%s] Received response: %s", name, response.status_code)
 
             if response.status_code == 200:
                 result = response.json().get("result", [])
@@ -381,17 +384,12 @@ def poll_printer(printer: dict, settings: dict, stop_event: threading.Event):
 
                     try:
                         print_receipt(ip, job["data"])
-                        # ---- Only reached if printing succeeded completely ----
                         confirmed = confirm_job(odoo_url, headers, job_id)
                         if confirmed:
                             logger.info("[%s] Job %s printed and confirmed", name, job_id)
                             log_job_internal(printer["id"], name, "success")
                         else:
-                            logger.warning(
-                                "[%s] Job %s printed but confirmation failed — "
-                                "server may re-queue it",
-                                name, job_id,
-                            )
+                            logger.warning("[%s] Job %s printed but confirmation failed", name, job_id)
                             log_job_internal(printer["id"], name, "failed", "Confirmation failed")
 
                     except PrinterNotReachableError as e:
@@ -411,7 +409,7 @@ def poll_printer(printer: dict, settings: dict, stop_event: threading.Event):
         except requests.exceptions.ConnectionError as e:
             logger.warning("[%s] Cannot reach source URL: %s — will retry", name, e)
         except Exception as e:
-            logger.error("[%s] Poll error: %s", name, e)
+            logger.error("[%s] Poll error: %s", name, type(e).__name__ + ": " + str(e))
 
         stop_event.wait(5)  # wait 5 s, but wake immediately if stop requested
 
@@ -430,6 +428,7 @@ class AgentManager:
         self._lock = threading.Lock()
 
     def start(self, printer: dict, settings: dict):
+        logging.error("DEBUG: agent_manager.start called for " + str(printer["id"]))
         pid = printer["id"]
         with self._lock:
             self._stop_existing(pid)
