@@ -502,9 +502,9 @@ def master_settings():
         odoo_url = request.form.get("odoo_url", "").strip()
         api_key = request.form.get("api_key", "").strip()
         company_id = int(request.form.get("company_id", 1))
-        allowed_ip = request.form.get("allowed_ip", "").strip()
+        auto_update = 1 if request.form.get("auto_update") else 0
 
-        update_settings(odoo_url, api_key, company_id, allowed_ip, settings.get("auto_update", 1))
+        update_settings(odoo_url, api_key, company_id, auto_update)
         
         # Restart all enabled printers to apply new settings
         settings = get_settings()
