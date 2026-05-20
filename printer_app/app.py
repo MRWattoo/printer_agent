@@ -54,7 +54,7 @@ app = Flask(
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "super-secret-printer-key")
 
 # Version
-__version__ = "1.0.0"
+__version__ = "2.0.0"
 
 # Session configuration: 10 minutes timeout
 app.permanent_session_lifetime = timedelta(minutes=10)

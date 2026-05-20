@@ -64,8 +64,22 @@ info "Upgrading printer-app package..."
 ok "Package upgraded."
 
 # --------------------------------------------------------------------------- #
-# 3. Restart the service
+# 3. Sync the systemd unit if it changed in the repo, then restart.
+#    Without this, systemctl warns "unit file changed on disk — run
+#    daemon-reload" and you end up restarting the OLD in-memory unit.
 # --------------------------------------------------------------------------- #
+REPO_UNIT="$SRC_DIR/$SERVICE_NAME.service"
+INSTALLED_UNIT="/etc/systemd/system/$SERVICE_NAME.service"
+
+if [[ -f "$REPO_UNIT" ]]; then
+    if [[ ! -f "$INSTALLED_UNIT" ]] || ! cmp -s "$REPO_UNIT" "$INSTALLED_UNIT"; then
+        info "Service unit changed — installing new unit file and reloading systemd."
+        install -m 0644 "$REPO_UNIT" "$INSTALLED_UNIT"
+        systemctl daemon-reload
+        ok "systemd daemon-reload completed."
+    fi
+fi
+
 info "Restarting $SERVICE_NAME..."
 systemctl restart "$SERVICE_NAME"
 ok "Service restarted."
