@@ -1,33 +1,161 @@
 {% extends "base_layout.html" %}
 {% block title %}Logs{% endblock %}
+
+{% block extra_styles %}
+  table { width: 100%; border-collapse: collapse; }
+  thead { background: #16213e; color: #cdd6f4; }
+  thead th { padding: .85rem 1rem; text-align: left; font-size: .82rem; text-transform: uppercase; letter-spacing: .07em; }
+  tbody tr { border-bottom: 1px solid #e8eaf0; }
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr:hover { background: #f7f8fc; }
+  td { padding: .8rem 1rem; font-size: .9rem; vertical-align: middle; }
+
+  .badge { display: inline-block; padding: .25rem .65rem; border-radius: 20px; font-size: .75rem; font-weight: 600; }
+  .badge-running { background: #d1fadf; color: #166534; }
+  .badge-offline { background: #fee2e2; color: #991b1b; }
+
+  .empty { text-align: center; padding: 3rem; color: #9ca3af; }
+  .page-size-selector select { padding: 0.3rem 0.5rem; border-radius: 4px; border: 1px solid #d1d5db; font-size: 0.9rem; }
+  .pagination-bar { display: flex; justify-content: center; align-items: center; gap: 0.5rem; margin-top: 1.5rem; }
+  .page-btn { padding: 0.4rem 0.8rem; border: 1px solid #d1d5db; border-radius: 4px; background: #fff; cursor: pointer; color: #374151; font-weight: 600; font-size: 0.85rem; transition: all 0.2s; }
+  .page-btn.active { background: #0f3460; color: #fff; border-color: #0f3460; }
+  .page-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+{% endblock %}
+
 {% block content %}
 <main>
   <div class="card">
-    <h2>Print Logs (Last 24 Hours)</h2>
-    <table style="width: 100%; border-collapse: collapse; margin-top: 1rem;">
+    <div style="display:flex; align-items:center; gap:.75rem; flex-wrap:wrap; padding-bottom:1rem; margin-bottom:1.25rem; border-bottom:1px solid #e5e7eb;">
+      <h2 style="margin:0; flex:1 1 auto;">Print Logs <span style="font-weight:400; color:#6b7280; font-size:.85rem;">(last 24 hours)</span></h2>
+      {% if logs %}
+        <div class="page-size-selector">
+          <label for="pageSize" style="font-size:.85rem; color:#374151;">Items per page:</label>
+          <select id="pageSize">
+            <option value="50" selected>50</option>
+            <option value="100">100</option>
+            <option value="150">150</option>
+            <option value="300">300</option>
+          </select>
+        </div>
+      {% endif %}
+    </div>
+
+    {% if logs %}
+    <table id="logsTable">
       <thead>
-        <tr style="background: #16213e; color: #fff; text-align: left;">
-          <th style="padding: 1rem;">Time</th>
-          <th style="padding: 1rem;">Printer</th>
-          <th style="padding: 1rem;">Status</th>
-          <th style="padding: 1rem;">Reason</th>
+        <tr>
+          <th>Time</th>
+          <th>Printer</th>
+          <th>Status</th>
+          <th>Reason</th>
         </tr>
       </thead>
-      <tbody>
+      <tbody id="log-rows">
         {% for log in logs %}
-        <tr style="border-bottom: 1px solid #eee;">
-          <td style="padding: 1rem;">{{ log.timestamp }}</td>
-          <td style="padding: 1rem;">{{ log.printer_name }}</td>
-          <td style="padding: 1rem;">
+        <tr class="log-row">
+          <td>{{ log.timestamp }}</td>
+          <td>{{ log.printer_name }}</td>
+          <td>
             <span class="badge {% if log.status == 'success' %}badge-running{% else %}badge-offline{% endif %}">
               {{ log.status|capitalize }}
             </span>
           </td>
-          <td style="padding: 1rem;">{{ log.reason }}</td>
+          <td>{{ log.reason }}</td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
+    <div class="pagination-bar" id="paginationBar"></div>
+    {% else %}
+      <div class="empty">
+        <p>No print activity in the last 24 hours.</p>
+      </div>
+    {% endif %}
   </div>
 </main>
+{% endblock %}
+
+{% block extra_scripts %}
+  let currentPage = 1;
+  let rowsPerPage = 50;
+
+  function initPagination() {
+    const table = document.getElementById('logsTable');
+    if (!table) return;
+    const rows = Array.from(table.querySelectorAll('tbody tr.log-row'));
+    if (rows.length === 0) return;
+
+    const sel = document.getElementById('pageSize');
+    if (sel) {
+      rowsPerPage = parseInt(sel.value, 10) || 50;
+      sel.addEventListener('change', e => {
+        rowsPerPage = parseInt(e.target.value, 10);
+        currentPage = 1;
+        renderTable();
+      });
+    }
+    renderTable();
+  }
+
+  function renderTable() {
+    const table = document.getElementById('logsTable');
+    if (!table) return;
+    const rows = Array.from(table.querySelectorAll('tbody tr.log-row'));
+    const totalPages = Math.max(1, Math.ceil(rows.length / rowsPerPage));
+    if (currentPage > totalPages) currentPage = totalPages;
+    if (currentPage < 1) currentPage = 1;
+    rows.forEach((row, i) => {
+      row.style.display = (i >= (currentPage - 1) * rowsPerPage && i < currentPage * rowsPerPage) ? '' : 'none';
+    });
+    renderPaginationBar(totalPages);
+  }
+
+  function renderPaginationBar(totalPages) {
+    const bar = document.getElementById('paginationBar');
+    if (!bar) return;
+    bar.innerHTML = '';
+    if (totalPages <= 1) return;
+
+    bar.appendChild(createBtn('&laquo; Prev', currentPage > 1, () => { currentPage--; renderTable(); }));
+
+    let startPage = Math.max(1, currentPage - 2);
+    let endPage   = Math.min(totalPages, currentPage + 2);
+    if (currentPage <= 3)             endPage   = Math.min(totalPages, 5);
+    if (currentPage >= totalPages - 2) startPage = Math.max(1, totalPages - 4);
+
+    if (startPage > 1) {
+      bar.appendChild(createPageBtn(1));
+      if (startPage > 2) bar.appendChild(createEllipsis());
+    }
+    for (let i = startPage; i <= endPage; i++) bar.appendChild(createPageBtn(i));
+    if (endPage < totalPages) {
+      if (endPage < totalPages - 1) bar.appendChild(createEllipsis());
+      bar.appendChild(createPageBtn(totalPages));
+    }
+
+    bar.appendChild(createBtn('Next &raquo;', currentPage < totalPages, () => { currentPage++; renderTable(); }));
+  }
+
+  function createBtn(text, enabled, handler) {
+    const b = document.createElement('button');
+    b.className = 'page-btn';
+    b.innerHTML = text;
+    b.disabled = !enabled;
+    if (enabled) b.addEventListener('click', handler);
+    return b;
+  }
+  function createPageBtn(p) {
+    const b = createBtn(p, true, () => { currentPage = p; renderTable(); });
+    if (p === currentPage) b.classList.add('active');
+    return b;
+  }
+  function createEllipsis() {
+    const s = document.createElement('span');
+    s.innerHTML = '&hellip;';
+    s.style.padding = '0 .4rem';
+    s.style.color = '#9ca3af';
+    return s;
+  }
+
+  document.addEventListener('DOMContentLoaded', initPagination);
 {% endblock %}
