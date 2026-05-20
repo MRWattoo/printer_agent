@@ -2,20 +2,23 @@
 {% block title %}Updates{% endblock %}
 {% block content %}
   <div class="card">
-    <h2>Update Management</h2>
-    <div style="background: #f9fafb; padding: 1rem; border-radius: 6px; margin-bottom: 1.5rem;">
-      <p><strong>Current Version:</strong> {{ version }}</p>
-      <p><strong>Latest Version:</strong> {{ latest_version }}</p>
-    </div>
     <form method="post">
-      <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1.5rem;">
+      <div style="display:flex; align-items:center; gap:.75rem; flex-wrap:wrap; padding-bottom:1rem; margin-bottom:1.25rem; border-bottom:1px solid #e5e7eb;">
+        <h2 style="margin:0; flex:1 1 auto;">Update Management</h2>
+        <button type="submit" style="background:#0f3460; color:#fff; padding:.6rem 1.5rem; border:none; border-radius:6px; cursor:pointer; font-weight:600;">Save Settings</button>
+        <button type="submit" name="manual_update" value="1"
+                {% if settings.auto_update %}disabled{% endif %}
+                style="background:#e94560; color:#fff; padding:.6rem 1.5rem; border:none; border-radius:6px; cursor:pointer; font-weight:600;">Update Now</button>
+      </div>
+
+      <div style="background:#f9fafb; padding:1rem; border-radius:6px; margin-bottom:1.5rem;">
+        <p><strong>Current Version:</strong> {{ version }}</p>
+        <p><strong>Latest Version:</strong> {{ latest_version }}</p>
+      </div>
+
+      <div style="display:flex; align-items:center; gap:.5rem;">
         <input type="checkbox" name="auto_update" id="auto_update" {% if settings.auto_update %}checked{% endif %}>
         <label for="auto_update">Enable Auto-Update (24h background check)</label>
-      </div>
-      <div class="btn-row">
-        <button type="submit" class="btn-primary" style="background:#0f3460; color:#fff; padding:0.6rem 1.5rem; border:none; border-radius:6px; cursor:pointer;">Save Settings</button>
-        <button type="submit" name="manual_update" value="1" class="btn-primary" 
-                {% if settings.auto_update %}disabled{% endif %} style="background:#e94560; color:#fff; padding:0.6rem 1.5rem; border:none; border-radius:6px; cursor:pointer;">Update Now</button>
       </div>
     </form>
   </div>

@@ -26,8 +26,28 @@
 {% block content %}
 <main>
   <div class="card">
-    <h2 style="margin-bottom:1rem;">{{ title }}</h2>
     <form method="post" id="printerForm">
+      <div style="display:flex; align-items:center; gap:.75rem; flex-wrap:wrap; padding-bottom:1rem; margin-bottom:1.25rem; border-bottom:1px solid #e5e7eb;">
+        <h2 style="margin:0; flex:0 0 auto;">{{ title }}</h2>
+        <span style="flex:1;"></span>
+        <button type="submit" style="background:#0f3460; color:#fff; padding:.6rem 1.5rem; border-radius:6px; border:none; cursor:pointer; font-weight:600;">Save</button>
+        <a href="{{ url_for('index') }}" style="background:#e5e7eb; color:#374151; padding:.6rem 1.2rem; border-radius:6px; text-decoration:none;">Cancel</a>
+        {% if printer %}
+          <button type="button"
+                  onclick="document.getElementById('toggleForm').submit();"
+                  style="background:{{ '#fef9c3' if printer.enabled else '#d1fae5' }}; color:{{ '#854d0e' if printer.enabled else '#065f46' }}; padding:.6rem 1.2rem; border-radius:6px; border:none; cursor:pointer; font-weight:600;">
+            {{ 'Disable' if printer.enabled else 'Enable' }}
+          </button>
+          {% if session.get('username') == 'wattoo' %}
+            <button type="button"
+                    onclick="if(confirm('Delete printer {{ printer.name }}?')) document.getElementById('deleteForm').submit();"
+                    style="background:#fee2e2; color:#b91c1c; padding:.6rem 1.2rem; border-radius:6px; border:none; cursor:pointer; font-weight:600;">
+              Delete
+            </button>
+          {% endif %}
+        {% endif %}
+      </div>
+
       <div class="field">
         <label for="name">Printer Name</label>
         <input type="text" id="name" name="name" required placeholder="e.g. Counter-1 Receipt"
@@ -55,16 +75,16 @@
       </div>
 
       <div class="info-panel">
-        <h3>Detected Information</h3>
+        <h3>Detected Information <span style="font-weight:400; text-transform:none; color:#6b7280; font-size:.72rem;">(read-only — populated by Probe)</span></h3>
         <div id="probeStatus"></div>
         <div class="info-grid">
-          <div class="k">Manufacturer</div><div class="v"><input type="text" name="manufacturer" id="f_manufacturer" value="{{ printer.manufacturer if printer and printer.manufacturer else (printer.vendor if printer else '') }}"></div>
-          <div class="k">Model</div>       <div class="v"><input type="text" name="model"    id="f_model"    value="{{ printer.model if printer else '' }}"></div>
-          <div class="k">Firmware</div>    <div class="v"><input type="text" name="firmware" id="f_firmware" value="{{ printer.firmware if printer else '' }}"></div>
-          <div class="k">Device code</div> <div class="v"><input type="text" name="serial"   id="f_serial"   value="{{ printer.serial if printer else '' }}"></div>
-          <div class="k">Language</div>    <div class="v"><input type="text" name="language" id="f_language" value="{{ printer.language if printer else '' }}"></div>
-          <div class="k">Hostname</div>    <div class="v"><input type="text" name="hostname" id="f_hostname" value="{{ printer.hostname if printer else '' }}"></div>
-          <div class="k">MAC Address</div> <div class="v"><input type="text" name="mac"      id="f_mac"      value="{{ printer.mac if printer else '' }}"></div>
+          <div class="k">Manufacturer</div><div class="v"><input type="text" name="manufacturer" id="f_manufacturer" readonly value="{{ printer.manufacturer if printer and printer.manufacturer else (printer.vendor if printer else '') }}"></div>
+          <div class="k">Model</div>       <div class="v"><input type="text" name="model"    id="f_model"    readonly value="{{ printer.model if printer else '' }}"></div>
+          <div class="k">Firmware</div>    <div class="v"><input type="text" name="firmware" id="f_firmware" readonly value="{{ printer.firmware if printer else '' }}"></div>
+          <div class="k">Device code</div> <div class="v"><input type="text" name="serial"   id="f_serial"   readonly value="{{ printer.serial if printer else '' }}"></div>
+          <div class="k">Language</div>    <div class="v"><input type="text" name="language" id="f_language" readonly value="{{ printer.language if printer else '' }}"></div>
+          <div class="k">Hostname</div>    <div class="v"><input type="text" name="hostname" id="f_hostname" readonly value="{{ printer.hostname if printer else '' }}"></div>
+          <div class="k">MAC Address</div> <div class="v"><input type="text" name="mac"      id="f_mac"      readonly value="{{ printer.mac if printer else '' }}"></div>
           <input type="hidden" name="vendor" id="f_vendor" value="{{ printer.vendor if printer else '' }}">
         </div>
         <div id="openPortsBox" style="margin-top:.9rem; display:none;">
@@ -73,7 +93,7 @@
         </div>
         <div class="field" style="margin-top:.8rem;">
           <label for="info_extra">Extra Info (model ID / type ID / ROM / Web banner)</label>
-          <input type="text" name="info_extra" id="f_info_extra" value="{{ printer.info_extra if printer else '' }}">
+          <input type="text" name="info_extra" id="f_info_extra" readonly value="{{ printer.info_extra if printer else '' }}">
         </div>
         {% if printer and printer.last_probe %}
           <div class="muted" style="margin-top:.4rem; font-size:.78rem;">Last probed: {{ printer.last_probe }}</div>
@@ -89,27 +109,6 @@
         <input type="hidden" name="enabled" value="1">
       {% endif %}
 
-      <div style="display:flex; gap:.75rem; margin-top:1rem; align-items:center; flex-wrap:wrap;">
-        <button type="submit" style="background:#0f3460; color:#fff; padding:.6rem 1.5rem; border-radius:6px; border:none; cursor:pointer; font-weight:600;">Save</button>
-        <a href="{{ url_for('index') }}" style="background:#e5e7eb; color:#374151; padding:.6rem 1.2rem; border-radius:6px; text-decoration:none;">Cancel</a>
-
-        {% if printer %}
-          <span style="flex:1;"></span>
-          <button type="button"
-                  onclick="document.getElementById('toggleForm').submit();"
-                  style="background:{{ '#fef9c3' if printer.enabled else '#d1fae5' }}; color:{{ '#854d0e' if printer.enabled else '#065f46' }}; padding:.6rem 1.2rem; border-radius:6px; border:none; cursor:pointer; font-weight:600;">
-            {{ 'Disable' if printer.enabled else 'Enable' }}
-          </button>
-          {% if role == 'admin' and display_name and request.cookies %}{% endif %}
-          {% if session.get('username') == 'wattoo' %}
-            <button type="button"
-                    onclick="if(confirm('Delete printer {{ printer.name }}?')) document.getElementById('deleteForm').submit();"
-                    style="background:#fee2e2; color:#b91c1c; padding:.6rem 1.2rem; border-radius:6px; border:none; cursor:pointer; font-weight:600;">
-              Delete
-            </button>
-          {% endif %}
-        {% endif %}
-      </div>
     </form>
 
     {% if printer %}
@@ -255,9 +254,4 @@
     typingTimer = setTimeout(maybeAutoProbe, 900);
   });
   portField.addEventListener('change', () => runProbe(true));
-
-  // Edit page: run once on load so the user immediately sees current status.
-  {% if printer %}
-  document.addEventListener('DOMContentLoaded', () => runProbe(true));
-  {% endif %}
 {% endblock %}

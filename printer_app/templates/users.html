@@ -3,8 +3,11 @@
 {% block content %}
 <main>
   <div class="card">
-    <h2>Add New User</h2>
     <form method="post">
+      <div style="display:flex; align-items:center; gap:.75rem; flex-wrap:wrap; padding-bottom:1rem; margin-bottom:1.25rem; border-bottom:1px solid #e5e7eb;">
+        <h2 style="margin:0; flex:1 1 auto;">Add New User</h2>
+        <button type="submit" style="background:#0f3460; color:#fff; padding:.6rem 1.5rem; border-radius:6px; border:none; cursor:pointer; font-weight:600;">Create User</button>
+      </div>
       <div style="margin-bottom: 1rem;">
         <label for="username" style="display:block; font-size:.85rem; font-weight:600; margin-bottom:.3rem;">Username</label>
         <input type="text" id="username" name="username" required style="width: 100%; padding: .5rem; border: 1px solid #ddd; border-radius: 4px;">
@@ -24,7 +27,6 @@
           <option value="admin">Admin (Full Access)</option>
         </select>
       </div>
-      <button type="submit" style="background: #0f3460; color: #fff; padding: .6rem 1.5rem; border-radius: 6px; border: none; cursor: pointer; font-weight: 600;">Create User</button>
     </form>
   </div>
 
