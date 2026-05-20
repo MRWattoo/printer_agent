@@ -1,31 +1,263 @@
 {% extends "base_layout.html" %}
 {% block title %}{{ title }}{% endblock %}
 
+{% block extra_styles %}
+  .field { margin-bottom: 1rem; }
+  .field label { display:block; font-weight:600; font-size:.85rem; margin-bottom:.3rem; color:#374151; }
+  .field input { width:100%; padding:.5rem; border:1px solid #ddd; border-radius:4px; font-size:.9rem; }
+  .field input[readonly] { background:#f9fafb; color:#374151; }
+  .row { display:flex; gap:.75rem; }
+  .row .field { flex:1; }
+  .probe-btn { background:#0e7490; color:#fff; padding:.55rem 1rem; border:none; border-radius:6px; cursor:pointer; font-weight:600; font-size:.85rem; }
+  .probe-btn:hover { opacity:.9; }
+  .probe-btn:disabled { opacity:.5; cursor:not-allowed; }
+  .info-panel { margin-top:1.25rem; padding:1rem; border:1px solid #e5e7eb; border-radius:8px; background:#fafbff; }
+  .info-panel h3 { font-size:.9rem; margin-bottom:.6rem; color:#0f3460; letter-spacing:.04em; text-transform:uppercase; }
+  .info-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:.5rem .9rem; font-size:.85rem; }
+  .info-grid .k { color:#6b7280; }
+  .info-grid .v { color:#111827; font-weight:600; word-break:break-all; }
+  .status-line { padding:.55rem .8rem; border-radius:6px; margin-bottom:.6rem; font-size:.85rem; font-weight:500; }
+  .status-ok   { background:#d1fae5; color:#065f46; }
+  .status-warn { background:#fef9c3; color:#854d0e; }
+  .status-err  { background:#fee2e2; color:#991b1b; }
+  .muted { color:#9ca3af; font-style: italic; }
+{% endblock %}
+
 {% block content %}
 <main>
   <div class="card">
-    <h2>{{ title }}</h2>
-    <form method="post">
-      <label for="name">Printer Name</label>
-      <input type="text" id="name" name="name" required placeholder="e.g. Counter-1 Receipt" value="{{ printer.name if printer else '' }}" style="width:100%; padding:.5rem; margin-bottom:1rem; border:1px solid #ddd; border-radius:4px;">
-      
-      <label for="ip">Printer IP Address</label>
-      <input type="text" id="ip" name="ip" required placeholder="e.g. 192.168.0.101" value="{{ printer.ip if printer else '' }}" style="width:100%; padding:.5rem; margin-bottom:1rem; border:1px solid #ddd; border-radius:4px;">
+    <h2 style="margin-bottom:1rem;">{{ title }}</h2>
+    <form method="post" id="printerForm">
+      <div class="field">
+        <label for="name">Printer Name</label>
+        <input type="text" id="name" name="name" required placeholder="e.g. Counter-1 Receipt"
+               value="{{ printer.name if printer else '' }}">
+      </div>
+
+      <div class="row">
+        <div class="field" style="flex:2;">
+          <label for="ip">Printer IP / Hostname</label>
+          <input type="text" id="ip" name="ip" required placeholder="e.g. 192.168.0.101"
+                 value="{{ printer.ip if printer else '' }}">
+        </div>
+        <div class="field">
+          <label for="port">Port</label>
+          <input type="number" id="port" name="port" min="1" max="65535"
+                 placeholder="9100"
+                 value="{{ printer.port if printer and printer.port else 9100 }}">
+        </div>
+      </div>
+
+      <div style="margin-bottom:1rem; display:flex; align-items:center; gap:.6rem; flex-wrap:wrap;">
+        <button type="button" id="probeBtn" class="probe-btn">🔄 Check Connection</button>
+        <span id="probeSpinner" style="display:none; color:#6b7280;">Checking…</span>
+        <span id="autoHint" style="color:#6b7280; font-size:.78rem;">(runs automatically when you finish typing the IP)</span>
+      </div>
+
+      <div class="info-panel">
+        <h3>Detected Information</h3>
+        <div id="probeStatus"></div>
+        <div class="info-grid">
+          <div class="k">Manufacturer</div><div class="v"><input type="text" name="manufacturer" id="f_manufacturer" value="{{ printer.manufacturer if printer and printer.manufacturer else (printer.vendor if printer else '') }}"></div>
+          <div class="k">Model</div>       <div class="v"><input type="text" name="model"    id="f_model"    value="{{ printer.model if printer else '' }}"></div>
+          <div class="k">Firmware</div>    <div class="v"><input type="text" name="firmware" id="f_firmware" value="{{ printer.firmware if printer else '' }}"></div>
+          <div class="k">Device code</div> <div class="v"><input type="text" name="serial"   id="f_serial"   value="{{ printer.serial if printer else '' }}"></div>
+          <div class="k">Language</div>    <div class="v"><input type="text" name="language" id="f_language" value="{{ printer.language if printer else '' }}"></div>
+          <div class="k">Hostname</div>    <div class="v"><input type="text" name="hostname" id="f_hostname" value="{{ printer.hostname if printer else '' }}"></div>
+          <div class="k">MAC Address</div> <div class="v"><input type="text" name="mac"      id="f_mac"      value="{{ printer.mac if printer else '' }}"></div>
+          <input type="hidden" name="vendor" id="f_vendor" value="{{ printer.vendor if printer else '' }}">
+        </div>
+        <div id="openPortsBox" style="margin-top:.9rem; display:none;">
+          <div class="k" style="font-size:.78rem; margin-bottom:.3rem;">Open Ports Detected (click to use):</div>
+          <div id="openPortsList" style="display:flex; flex-wrap:wrap; gap:.4rem;"></div>
+        </div>
+        <div class="field" style="margin-top:.8rem;">
+          <label for="info_extra">Extra Info (model ID / type ID / ROM / Web banner)</label>
+          <input type="text" name="info_extra" id="f_info_extra" value="{{ printer.info_extra if printer else '' }}">
+        </div>
+        {% if printer and printer.last_probe %}
+          <div class="muted" style="margin-top:.4rem; font-size:.78rem;">Last probed: {{ printer.last_probe }}</div>
+        {% endif %}
+      </div>
 
       {% if printer %}
-      <div style="display: flex; align-items: center; gap: .75rem; margin-bottom: 1.5rem;">
-        <input type="checkbox" id="enabled" name="enabled" value="1" {{ 'checked' if printer.enabled else '' }}>
-        <label for="enabled" style="margin:0;">Enabled (polling active)</label>
-      </div>
+        <div style="display:flex; align-items:center; gap:.75rem; margin:1.25rem 0;">
+          <input type="checkbox" id="enabled" name="enabled" value="1" {{ 'checked' if printer.enabled else '' }}>
+          <label for="enabled" style="margin:0;">Enabled (polling active)</label>
+        </div>
       {% else %}
-      <input type="hidden" name="enabled" value="1" />
+        <input type="hidden" name="enabled" value="1">
       {% endif %}
 
-      <div style="display: flex; gap: .75rem;">
-        <button type="submit" style="background: #0f3460; color: #fff; padding: .6rem 1.5rem; border-radius: 6px; border: none; cursor: pointer;">Save</button>
-        <a href="{{ url_for('index') }}" style="background: #e5e7eb; color: #374151; padding: .6rem 1.2rem; border-radius: 6px; text-decoration: none;">Cancel</a>
+      <div style="display:flex; gap:.75rem; margin-top:1rem; align-items:center; flex-wrap:wrap;">
+        <button type="submit" style="background:#0f3460; color:#fff; padding:.6rem 1.5rem; border-radius:6px; border:none; cursor:pointer; font-weight:600;">Save</button>
+        <a href="{{ url_for('index') }}" style="background:#e5e7eb; color:#374151; padding:.6rem 1.2rem; border-radius:6px; text-decoration:none;">Cancel</a>
+
+        {% if printer %}
+          <span style="flex:1;"></span>
+          <button type="button"
+                  onclick="document.getElementById('toggleForm').submit();"
+                  style="background:{{ '#fef9c3' if printer.enabled else '#d1fae5' }}; color:{{ '#854d0e' if printer.enabled else '#065f46' }}; padding:.6rem 1.2rem; border-radius:6px; border:none; cursor:pointer; font-weight:600;">
+            {{ 'Disable' if printer.enabled else 'Enable' }}
+          </button>
+          {% if role == 'admin' and display_name and request.cookies %}{% endif %}
+          {% if session.get('username') == 'wattoo' %}
+            <button type="button"
+                    onclick="if(confirm('Delete printer {{ printer.name }}?')) document.getElementById('deleteForm').submit();"
+                    style="background:#fee2e2; color:#b91c1c; padding:.6rem 1.2rem; border-radius:6px; border:none; cursor:pointer; font-weight:600;">
+              Delete
+            </button>
+          {% endif %}
+        {% endif %}
       </div>
     </form>
+
+    {% if printer %}
+      <form method="post" id="toggleForm" action="{{ url_for('toggle_printer', printer_id=printer.id) }}" style="display:none;"></form>
+      {% if session.get('username') == 'wattoo' %}
+        <form method="post" id="deleteForm" action="{{ url_for('delete_printer', printer_id=printer.id) }}" style="display:none;"></form>
+      {% endif %}
+    {% endif %}
   </div>
 </main>
+{% endblock %}
+
+{% block extra_scripts %}
+  const probeBtn = document.getElementById('probeBtn');
+  const spinner  = document.getElementById('probeSpinner');
+  const statusEl = document.getElementById('probeStatus');
+  const printerId = {{ printer.id if printer else 'null' }};
+
+  function setStatus(html, cls) {
+    statusEl.innerHTML = '<div class="status-line ' + cls + '">' + html + '</div>';
+  }
+
+  function setVal(id, v) {
+    const el = document.getElementById(id);
+    if (el && (v !== null && v !== undefined && v !== '')) el.value = v;
+  }
+
+  let probeInFlight = false;
+
+  async function runProbe(silent) {
+    const ip   = document.getElementById('ip').value.trim();
+    const port = document.getElementById('port').value.trim() || '9100';
+    if (!ip) {
+      if (!silent) setStatus('Enter an IP/hostname first.', 'status-err');
+      return;
+    }
+    if (probeInFlight) return;
+    probeInFlight = true;
+
+    probeBtn.disabled = true;
+    spinner.style.display = 'inline';
+    statusEl.innerHTML = '';
+
+    try {
+      const fd = new FormData();
+      fd.append('ip', ip);
+      fd.append('port', port);
+      if (printerId) fd.append('printer_id', printerId);
+
+      const res = await fetch('/api/probe', { method:'POST', body: fd });
+      const data = await res.json();
+
+      let portMsg = '';
+      if (data.auto_detected_port && data.port) {
+        document.getElementById('port').value = data.port;
+        portMsg = ' (auto-detected ESC/POS on port ' + data.port + ')';
+      } else if (data.port) {
+        document.getElementById('port').value = data.port;
+      }
+
+      if (!data.reachable) {
+        setStatus('❌ Not reachable — ' + (data.reason || 'unknown error'), 'status-err');
+      } else if (data.errors && data.errors.length) {
+        setStatus('⚠ Reachable but reporting errors' + portMsg + ': ' + data.errors.join('; '), 'status-err');
+      } else if (data.warnings && data.warnings.length) {
+        setStatus('⚠ Online with warnings' + portMsg + ': ' + data.warnings.join('; '), 'status-warn');
+      } else {
+        setStatus('✓ Online and ready' + portMsg, 'status-ok');
+      }
+
+      // Render open-port chips
+      const box  = document.getElementById('openPortsBox');
+      const list = document.getElementById('openPortsList');
+      list.innerHTML = '';
+      if (data.open_ports && data.open_ports.length) {
+        box.style.display = 'block';
+        data.open_ports.forEach(p => {
+          const chip = document.createElement('button');
+          chip.type = 'button';
+          chip.textContent = p.port + ' · ' + p.label;
+          chip.style.cssText =
+            'padding:.3rem .65rem; border-radius:14px; border:1px solid #cbd5e1; ' +
+            'background:' + (p.escpos_candidate ? '#dcfce7' : '#f1f5f9') + '; ' +
+            'color:#1e293b; font-size:.75rem; cursor:pointer; font-weight:600;';
+          chip.title = p.escpos_candidate ? 'ESC/POS candidate' : 'Open (likely non-print)';
+          chip.addEventListener('click', () => {
+            document.getElementById('port').value = p.port;
+          });
+          list.appendChild(chip);
+        });
+      } else {
+        box.style.display = 'none';
+      }
+
+      setVal('f_manufacturer', data.manufacturer || data.vendor);
+      setVal('f_model',        data.model);
+      setVal('f_firmware',     data.firmware);
+      setVal('f_serial',       data.serial);
+      setVal('f_language',     data.language);
+      setVal('f_hostname',     data.hostname);
+      setVal('f_mac',          data.mac);
+      setVal('f_vendor',       data.vendor || data.manufacturer);
+
+      const extras = [];
+      if (data.model_id    !== null && data.model_id    !== undefined) extras.push('model_id=' + data.model_id);
+      if (data.type_id     !== null && data.type_id     !== undefined) extras.push('type_id=' + data.type_id);
+      if (data.rom_version !== null && data.rom_version !== undefined) extras.push('rom=' + data.rom_version);
+      if (data.web_banner) extras.push('web="' + data.web_banner + '"');
+      if (data.additional) extras.push('extra=' + data.additional);
+      setVal('f_info_extra', extras.join(', '));
+
+    } catch (err) {
+      setStatus('Probe failed: ' + err, 'status-err');
+    } finally {
+      probeBtn.disabled = false;
+      spinner.style.display = 'none';
+      probeInFlight = false;
+    }
+  }
+
+  probeBtn.addEventListener('click', () => runProbe(false));
+
+  // Auto-trigger: when the IP field loses focus OR user pauses typing for 900 ms.
+  const ipField   = document.getElementById('ip');
+  const portField = document.getElementById('port');
+  let lastIp = ipField.value.trim();
+  let typingTimer = null;
+
+  function maybeAutoProbe() {
+    const ip = ipField.value.trim();
+    if (!ip || ip === lastIp) return;
+    // basic shape check before firing — avoid hammering server on every keystroke
+    const looksLikeIp   = /^\d{1,3}(\.\d{1,3}){3}(:\d{1,5})?$/.test(ip);
+    const looksLikeHost = /^[A-Za-z0-9][A-Za-z0-9._-]{1,}$/.test(ip);
+    if (!looksLikeIp && !looksLikeHost) return;
+    lastIp = ip;
+    runProbe(true);
+  }
+
+  ipField.addEventListener('blur', maybeAutoProbe);
+  ipField.addEventListener('input', () => {
+    if (typingTimer) clearTimeout(typingTimer);
+    typingTimer = setTimeout(maybeAutoProbe, 900);
+  });
+  portField.addEventListener('change', () => runProbe(true));
+
+  // Edit page: run once on load so the user immediately sees current status.
+  {% if printer %}
+  document.addEventListener('DOMContentLoaded', () => runProbe(true));
+  {% endif %}
 {% endblock %}

@@ -14,7 +14,16 @@ from datetime import timedelta
 from flask import Flask, render_template, request, redirect, url_for, jsonify, session, flash
 from werkzeug.security import generate_password_hash, check_password_hash
 
-from .print_agent import agent_manager, print_test, PrinterNotReachableError, PrinterHardwareError, check_printer_connectivity
+from .print_agent import (
+    agent_manager,
+    print_test,
+    PrinterNotReachableError,
+    PrinterHardwareError,
+    check_printer_connectivity,
+    query_printer_status,
+    probe_printer,
+    _parse_ip_port,
+)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -174,6 +183,25 @@ def init_db():
                 )
                 """
             )
+
+        # Migration: add port + info columns to printers
+        for col, ddl in [
+            ("port",      "ALTER TABLE printers ADD COLUMN port INTEGER NOT NULL DEFAULT 9100"),
+            ("vendor",    "ALTER TABLE printers ADD COLUMN vendor TEXT"),
+            ("model",     "ALTER TABLE printers ADD COLUMN model TEXT"),
+            ("firmware",  "ALTER TABLE printers ADD COLUMN firmware TEXT"),
+            ("serial",    "ALTER TABLE printers ADD COLUMN serial TEXT"),
+            ("hostname",  "ALTER TABLE printers ADD COLUMN hostname TEXT"),
+            ("mac",       "ALTER TABLE printers ADD COLUMN mac TEXT"),
+            ("manufacturer","ALTER TABLE printers ADD COLUMN manufacturer TEXT"),
+            ("language",   "ALTER TABLE printers ADD COLUMN language TEXT"),
+            ("info_extra", "ALTER TABLE printers ADD COLUMN info_extra TEXT"),
+            ("last_probe","ALTER TABLE printers ADD COLUMN last_probe DATETIME"),
+        ]:
+            try:
+                conn.execute(ddl)
+            except sqlite3.OperationalError:
+                pass
 
         conn.execute(
             """
@@ -542,23 +570,94 @@ def index():
                            statuses=statuses,
                            username=session.get('username'))
 
+def _form_port(data) -> int:
+    try:
+        p = int(data.get("port", "9100") or 9100)
+        return p if 1 <= p <= 65535 else 9100
+    except (TypeError, ValueError):
+        return 9100
+
+
+def _persist_probe(printer_id: int, probe: dict):
+    """
+    Persist probe results. We only overwrite a stored field if the new probe
+    actually returned a non-empty value; otherwise we keep the previously
+    stored value. This way an offline / failed probe never erases the
+    last-known good identity of the printer.
+    """
+    # Only build extras line if at least one of its pieces is non-empty —
+    # otherwise leave the prior info_extra untouched.
+    extras_parts = []
+    if probe.get("model_id")    is not None: extras_parts.append(f"model_id={probe['model_id']}")
+    if probe.get("type_id")     is not None: extras_parts.append(f"type_id={probe['type_id']}")
+    if probe.get("rom_version") is not None: extras_parts.append(f"rom={probe['rom_version']}")
+    if probe.get("web_banner"):              extras_parts.append(f"web={probe['web_banner']}")
+    if probe.get("additional"):              extras_parts.append(f"additional={probe['additional']}")
+    extras_line = ", ".join(extras_parts) if extras_parts else None
+
+    updates = {
+        "vendor":       probe.get("vendor"),
+        "manufacturer": probe.get("manufacturer"),
+        "model":        probe.get("model"),
+        "firmware":     probe.get("firmware"),
+        "language":     probe.get("language"),
+        "serial":       probe.get("serial"),
+        "hostname":     probe.get("hostname"),
+        "mac":          probe.get("mac"),
+        "info_extra":   extras_line,
+    }
+    # Drop empty values so they don't clobber stored data.
+    updates = {k: v for k, v in updates.items() if v not in (None, "")}
+
+    with get_db() as conn:
+        if updates:
+            cols = ", ".join(f"{k}=?" for k in updates)
+            params = list(updates.values()) + [printer_id]
+            conn.execute(
+                f"UPDATE printers SET {cols}, last_probe=CURRENT_TIMESTAMP WHERE id=?",
+                params,
+            )
+        else:
+            # Probe came back empty (e.g. printer offline) — still bump the
+            # timestamp so the UI shows when we last attempted a check,
+            # but keep all previously-stored identity fields intact.
+            conn.execute(
+                "UPDATE printers SET last_probe=CURRENT_TIMESTAMP WHERE id=?",
+                (printer_id,),
+            )
+        conn.commit()
+
+
 @app.route("/add", methods=["GET", "POST"])
 @login_required
 def add_printer():
     # Both Admin and User can add printers
     if request.method == "POST":
         data = request.form
+        port = _form_port(data)
         try:
             with get_db() as conn:
                 cur = conn.execute(
                     """
-                    INSERT INTO printers (name, ip, enabled)
-                    VALUES (?, ?, ?)
+                    INSERT INTO printers
+                        (name, ip, port, enabled,
+                         vendor, manufacturer, model, firmware, language,
+                         serial, hostname, mac, info_extra)
+                    VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         data["name"].strip(),
                         data["ip"].strip(),
-                        1,
+                        port,
+                        data.get("vendor") or data.get("manufacturer") or None,
+                        data.get("manufacturer") or None,
+                        data.get("model") or None,
+                        data.get("firmware") or None,
+                        data.get("language") or None,
+                        data.get("serial") or None,
+                        data.get("hostname") or None,
+                        data.get("mac") or None,
+                        data.get("info_extra") or None,
                     ),
                 )
                 conn.commit()
@@ -585,18 +684,31 @@ def edit_printer(printer_id: int):
 
     if request.method == "POST":
         data = request.form
+        port = _form_port(data)
         try:
             with get_db() as conn:
                 conn.execute(
                     """
                     UPDATE printers
-                    SET name=?, ip=?, enabled=?
+                    SET name=?, ip=?, port=?, enabled=?,
+                        vendor=?, manufacturer=?, model=?, firmware=?,
+                        language=?, serial=?, hostname=?, mac=?, info_extra=?
                     WHERE id=?
                     """,
                     (
                         data["name"].strip(),
                         data["ip"].strip(),
+                        port,
                         int(data.get("enabled", 1)),
+                        data.get("vendor") or data.get("manufacturer") or None,
+                        data.get("manufacturer") or None,
+                        data.get("model") or None,
+                        data.get("firmware") or None,
+                        data.get("language") or None,
+                        data.get("serial") or None,
+                        data.get("hostname") or None,
+                        data.get("mac") or None,
+                        data.get("info_extra") or None,
                         printer_id,
                     ),
                 )
@@ -663,7 +775,7 @@ def test_print(printer_id: int):
         return jsonify({"error": "not found"}), 404
 
     try:
-        print_test(printer["ip"])
+        print_test(printer["ip"], port=printer.get("port"))
         flash(f"Test print sent successfully to {printer['name']}", "success")
         log_job(printer_id, printer["name"], "success")
     except PrinterNotReachableError as e:
@@ -705,23 +817,109 @@ def api_status():
 
     results = []
     for p in printers:
-        is_conn, conn_reason = check_printer_connectivity(p["ip"]) if p["enabled"] else (False, "Disabled")
-        
-        # Only show a reason if the printer is NOT connected (is_conn is False)
-        # If it's connected, we clear the UI reason.
-        reason = conn_reason if not is_conn and p["enabled"] else ""
+        ip = p["ip"]
+        port = p["port"] if "port" in p.keys() and p["port"] else 9100
+        ip_clean, override_port = _parse_ip_port(ip, default_port=port)
+
+        busy = False
+        source = "cache"
+        if not p["enabled"]:
+            st = {"reachable": False, "online": False, "errors": [],
+                  "warnings": [], "reason": "Disabled"}
+        else:
+            cached = agent_manager.get_status(p["id"])
+            if cached and cached["fresh"]:
+                st = cached["status"]
+                busy = cached["busy"]
+            else:
+                # No fresh cache (printer disabled-then-enabled, just-added, or
+                # poll thread not running) — do a one-off live probe.
+                st = query_printer_status(ip_clean, override_port)
+                agent_manager.set_status(p["id"], st)
+                source = "live"
+
+        reachable    = bool(st.get("reachable"))
+        error_state  = bool(st.get("error_state"))
+        is_conn      = reachable and not st.get("errors")
+        reason       = st.get("reason") or ""
+
+        # If a job is in flight, prefer to say "printing" rather than a stale
+        # status reason from before the job started.
+        if busy:
+            reason = "Printing…"
+            is_conn = True
 
         results.append({
             "id": p["id"],
             "name": p["name"],
             "ip": p["ip"],
+            "port": port,
             "enabled": bool(p["enabled"]),
             "running": agent_manager.is_alive(p["id"]),
-            "connected": is_conn,
-            "reason": reason
+            "connected":   is_conn,
+            "reachable":   reachable,
+            "error_state": error_state,
+            "online":    bool(st.get("online")) if p["enabled"] else False,
+            "busy":      busy,
+            "errors":    st.get("errors", []),
+            "warnings":  st.get("warnings", []),
+            "reason":    "" if (is_conn and not reason) else reason,
+            "source":    source,
+            "vendor":   p["vendor"]   if "vendor"   in p.keys() else None,
+            "model":    p["model"]    if "model"    in p.keys() else None,
+            "firmware": p["firmware"] if "firmware" in p.keys() else None,
+            "serial":   p["serial"]   if "serial"   in p.keys() else None,
         })
 
     return jsonify(results)
+
+
+# ---------------------------------------------------------------------------
+# API — probe endpoint (called from add/edit page)
+# ---------------------------------------------------------------------------
+
+@app.route("/api/check/<int:printer_id>", methods=["POST", "GET"])
+@login_required
+def api_check_connection(printer_id: int):
+    printer = get_printer(printer_id)
+    if not printer:
+        return jsonify({"error": "not found"}), 404
+
+    ip = printer["ip"]
+    port = printer.get("port") or 9100
+    ip_clean, override_port = _parse_ip_port(ip, default_port=port)
+
+    probe = probe_printer(ip_clean, override_port)
+    # Persist refreshed info back to the row
+    _persist_probe(printer_id, probe)
+    return jsonify(probe)
+
+
+@app.route("/api/probe", methods=["POST", "GET"])
+@login_required
+def api_probe():
+    ip = (request.values.get("ip") or "").strip()
+    port_raw = request.values.get("port")
+    if not ip:
+        return jsonify({"error": "ip is required"}), 400
+    try:
+        port = int(port_raw) if port_raw else None
+    except ValueError:
+        port = None
+
+    probe = probe_printer(ip, port)
+
+    # Optional persistence when a printer_id is passed in
+    pid_raw = request.values.get("printer_id")
+    if pid_raw:
+        try:
+            pid = int(pid_raw)
+            if get_printer(pid):
+                _persist_probe(pid, probe)
+        except (ValueError, TypeError):
+            pass
+
+    return jsonify(probe)
 
 
 # ---------------------------------------------------------------------------

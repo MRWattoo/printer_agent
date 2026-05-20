@@ -9,6 +9,8 @@
     tbody tr { border-bottom: 1px solid #e8eaf0; transition: background .15s; }
     tbody tr:last-child { border-bottom: none; }
     tbody tr:hover { background: #f7f8fc; }
+    tbody tr.clickable { cursor: pointer; }
+    tbody tr.clickable:hover { background: #eef2ff; }
     td { padding: .8rem 1rem; font-size: .9rem; vertical-align: middle; }
 
     .badge { display: inline-block; padding: .25rem .65rem; border-radius: 20px; font-size: .75rem; font-weight: 600; }
@@ -17,6 +19,9 @@
     .badge-disabled { background: #e5e7eb; color: #6b7280; }
     .badge-connected { background: #d1fae5; color: #047857; }
     .badge-offline  { background: #fee2e2; color: #b91c1c; }
+    .badge-busy     { background: #dbeafe; color: #1d4ed8; }
+    .badge-warn     { background: #fef9c3; color: #854d0e; }
+    .badge-error    { background: #ffedd5; color: #9a3412; }
 
     .actions { display: flex; gap: .5rem; }
     .btn { padding: .35rem .8rem; border-radius: 5px; font-size: .8rem; font-weight: 600; cursor: pointer; border: none; text-decoration: none; display: inline-block; transition: opacity .15s; }
@@ -25,6 +30,7 @@
     .btn-toggle  { background: #fef9c3; color: #854d0e; }
     .btn-delete  { background: #fee2e2; color: #b91c1c; }
     .btn-test    { background: #d1fae5; color: #047857; }
+    .btn-check   { background: #e0f2fe; color: #075985; }
     .btn-add { background: #0f3460; color: #e94560; border: 2px solid #e94560; padding: .45rem 1.1rem; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 0.85rem; transition: background .2s; }
     .btn-add:hover { background: #e94560; color: #fff; }
 
@@ -40,6 +46,7 @@
 {% block content %}
   <div class="card" style="padding: 1.5rem;">
     <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+      <a href="{{ url_for('add_printer') }}" class="btn-add">+ Add Printer</a>
       <div class="pagination-controls" style="margin-bottom: 0; {% if not printers %}visibility: hidden;{% endif %}">
         <div class="page-size-selector">
           <label for="pageSize">Items per page:</label>
@@ -50,7 +57,6 @@
           </select>
         </div>
       </div>
-      <a href="{{ url_for('add_printer') }}" class="btn-add">+ Add Printer</a>
     </div>
     {% if printers %}
     <table id="printersTable">
@@ -67,7 +73,8 @@
       </thead>
       <tbody id="printer-rows">
         {% for p in printers %}
-        <tr id="row-{{ p.id }}" class="printer-row">
+        <tr id="row-{{ p.id }}" class="printer-row {% if role == 'admin' %}clickable{% endif %}"
+            {% if role == 'admin' %}data-edit-url="{{ url_for('edit_printer', printer_id=p.id) }}"{% endif %}>
           <td>{{ p.id }}</td>
           <td><strong>{{ p.name }}</strong></td>
           <td><code>{{ p.ip }}</code></td>
@@ -86,28 +93,12 @@
             {% endif %}
           </td>
           <td id="reason-{{ p.id }}" style="font-size:0.8rem; color:#b91c1c;"></td>
-          <td>
+          <td class="row-actions" onclick="event.stopPropagation();">
+              <button type="button" class="btn btn-check" onclick="checkConnection({{ p.id }}, this)">Test Connection</button>
+
               <form method="post" action="{{ url_for('test_print', printer_id=p.id) }}" style="display:inline">
                 <button type="submit" class="btn btn-test">Test Print</button>
               </form>
-              
-              {% if role == 'admin' %}
-                <a href="{{ url_for('edit_printer', printer_id=p.id) }}" class="btn btn-edit">Edit</a>
-              {% endif %}
-              
-              <form method="post" action="{{ url_for('toggle_printer', printer_id=p.id) }}" style="display:inline">
-                <button type="submit" class="btn btn-toggle">
-                  {{ 'Disable' if p.enabled else 'Enable' }}
-                </button>
-              </form>
-              
-              {% if role == 'admin' and username == 'wattoo' %}
-                <form method="post" action="{{ url_for('delete_printer', printer_id=p.id) }}"
-                      onsubmit="return confirm('Delete printer {{ p.name }}?')" style="display:inline">
-                  <button type="submit" class="btn btn-delete">Delete</button>
-                </form>
-              {% endif %}
-            </div>
           </td>
         </tr>
         {% endfor %}
@@ -210,6 +201,15 @@
   
   document.addEventListener('DOMContentLoaded', initPagination);
 
+  // Whole-row click → edit page (admin only). Buttons in .row-actions stop propagation.
+  document.addEventListener('click', function(e) {
+    const row = e.target.closest('tr.clickable');
+    if (!row) return;
+    if (e.target.closest('.row-actions, button, a, form, input')) return;
+    const url = row.getAttribute('data-edit-url');
+    if (url) window.location.href = url;
+  });
+
   async function refreshStatus() {
     try {
       const res = await fetch('/api/status');
@@ -220,20 +220,104 @@
         const row = document.getElementById('row-' + p.id);
         if (!row) return;
         
+        const hasWarn = p.warnings && p.warnings.length > 0;
+        const hasErr  = p.errors   && p.errors.length   > 0;
+
         const badgeCell = row.querySelector('td:nth-child(4)');
-        if (badgeCell) badgeCell.innerHTML = !p.enabled ? '<span class="badge badge-disabled">Disabled</span>' : (p.running && p.connected ? '<span class="badge badge-running">Running</span>' : '<span class="badge badge-stopped">Failed</span>');
-        
+        if (badgeCell) {
+          let badge;
+          if (!p.enabled)         badge = '<span class="badge badge-disabled">Disabled</span>';
+          else if (p.busy)        badge = '<span class="badge badge-busy">Printing…</span>';
+          else if (!p.running)    badge = '<span class="badge badge-stopped">Agent stopped</span>';
+          else if (p.error_state) badge = '<span class="badge badge-error">Error</span>';
+          else if (!p.connected)  badge = '<span class="badge badge-offline">Offline</span>';
+          else if (hasWarn)       badge = '<span class="badge badge-warn">Warning</span>';
+          else                    badge = '<span class="badge badge-running">Online</span>';
+          badgeCell.innerHTML = badge;
+        }
+
         const connectivityCell = document.getElementById('connectivity-' + p.id);
-        if (connectivityCell) connectivityCell.innerHTML = !p.enabled ? '<span class="badge badge-disabled">N/A</span>' : (p.connected ? '<span class="badge badge-connected">Connected</span>' : '<span class="badge badge-offline">Failed</span>');
+        if (connectivityCell) {
+          let c;
+          if (!p.enabled)         c = '<span class="badge badge-disabled">N/A</span>';
+          else if (p.busy)        c = '<span class="badge badge-busy">Busy</span>';
+          else if (p.connected)   c = '<span class="badge badge-connected">Connected</span>';
+          else if (p.error_state) c = '<span class="badge badge-warn">On network</span>';
+          else                    c = '<span class="badge badge-offline">Disconnected</span>';
+          connectivityCell.innerHTML = c;
+        }
 
         const reasonCell = document.getElementById('reason-' + p.id);
         if (reasonCell) {
-            console.log(`Setting reason for ${p.id}:`, p.reason);
-            reasonCell.textContent = p.reason || '';
+          reasonCell.style.color = hasErr ? '#b91c1c' : (hasWarn ? '#854d0e' : '#6b7280');
+          reasonCell.textContent = p.reason || '';
         }
       });
     } catch(e) { console.error("Error fetching status:", e); }
   }
   setInterval(refreshStatus, 5000);
   refreshStatus();
+
+  // ----- Test Connection button -----
+  function showToast(message, kind) {
+    let el = document.getElementById('connToast');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'connToast';
+      el.style.cssText =
+        'position:fixed; right:1.2rem; bottom:1.2rem; max-width:380px; ' +
+        'padding:.85rem 1rem; border-radius:8px; font-size:.85rem; ' +
+        'box-shadow:0 6px 18px rgba(0,0,0,.15); z-index:9999; ' +
+        'white-space:pre-line; line-height:1.35;';
+      document.body.appendChild(el);
+    }
+    const palette = {
+      ok:   ['#d1fae5', '#065f46'],
+      warn: ['#fef9c3', '#854d0e'],
+      err:  ['#fee2e2', '#991b1b'],
+    }[kind] || ['#e5e7eb', '#374151'];
+    el.style.background = palette[0];
+    el.style.color = palette[1];
+    el.textContent = message;
+    el.style.display = 'block';
+    clearTimeout(el._t);
+    el._t = setTimeout(() => { el.style.display = 'none'; }, 7000);
+  }
+
+  async function checkConnection(printerId, btn) {
+    const original = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Checking…';
+    try {
+      const res = await fetch('/api/check/' + printerId, { method: 'POST' });
+      if (res.status === 401 || res.redirected) { window.location.reload(); return; }
+      const d = await res.json();
+
+      const lines = [];
+      const head = d.reachable
+        ? (d.errors && d.errors.length ? '⚠ Reachable but reporting errors'
+          : (d.warnings && d.warnings.length ? '⚠ Online with warnings'
+          : '✓ Online and ready'))
+        : '❌ Not reachable';
+      lines.push(head + (d.port ? '  (port ' + d.port + ')' : ''));
+      if (d.reason)                     lines.push(d.reason);
+      if (d.vendor || d.model)          lines.push('Device: ' + [d.vendor, d.model].filter(Boolean).join(' '));
+      if (d.firmware)                   lines.push('Firmware: ' + d.firmware);
+      if (d.serial)                     lines.push('Serial: ' + d.serial);
+      if (d.open_ports && d.open_ports.length) {
+        lines.push('Open ports: ' + d.open_ports.map(p => p.port).join(', '));
+      }
+
+      const kind = !d.reachable ? 'err'
+                 : (d.errors && d.errors.length ? 'err'
+                 : (d.warnings && d.warnings.length ? 'warn' : 'ok'));
+      showToast(lines.join('\n'), kind);
+      refreshStatus();
+    } catch (e) {
+      showToast('Check failed: ' + e, 'err');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = original;
+    }
+  }
 {% endblock %}
