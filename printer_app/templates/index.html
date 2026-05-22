@@ -99,6 +99,12 @@
               <form method="post" action="{{ url_for('test_print', printer_id=p.id) }}" style="display:inline">
                 <button type="submit" class="btn btn-test">Test Print</button>
               </form>
+
+              {% if role == 'admin' %}
+              <form method="post" action="{{ url_for('delete_printer', printer_id=p.id) }}" style="display:inline" onsubmit="return confirm('Delete printer {{ p.name }}?');">
+                <button type="submit" class="btn btn-delete">Delete</button>
+              </form>
+              {% endif %}
           </td>
         </tr>
         {% endfor %}
