@@ -755,11 +755,7 @@ def edit_printer(printer_id: int):
 @login_required
 @admin_required
 def delete_printer(printer_id: int):
-    # Only main admin (wattoo) can delete printers
-    if session.get('username') != 'wattoo':
-        flash("Only the main admin can delete printers", "error")
-        return redirect(url_for("index"))
-    
+    # Any admin can delete printers
     agent_manager.stop(printer_id)
     with get_db() as conn:
         conn.execute("DELETE FROM printers WHERE id=?", (printer_id,))
