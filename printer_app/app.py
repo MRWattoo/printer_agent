@@ -361,6 +361,29 @@ def delete_user(user_id: int):
     return redirect(url_for("users_management"))
 
 
+@app.route("/users/edit_role/<int:user_id>", methods=["POST"])
+@login_required
+@admin_required
+def edit_user_role(user_id: int):
+    new_role = request.form.get("role", "user")
+    if new_role not in ("admin", "user"):
+        flash("Invalid role.", "error")
+        return redirect(url_for("users_management"))
+
+    with get_db() as conn:
+        user = conn.execute("SELECT username FROM users WHERE id=?", (user_id,)).fetchone()
+        if not user:
+            flash("User not found.", "error")
+            return redirect(url_for("users_management"))
+        if user["username"] == "wattoo":
+            flash("Default user 'wattoo' role cannot be changed.", "error")
+            return redirect(url_for("users_management"))
+        conn.execute("UPDATE users SET role=? WHERE id=?", (new_role, user_id))
+        conn.commit()
+    flash(f"Role updated for user '{user['username']}'.", "success")
+    return redirect(url_for("users_management"))
+
+
 @app.route("/users/change_password/<int:user_id>", methods=["GET", "POST"])
 @login_required
 @admin_required

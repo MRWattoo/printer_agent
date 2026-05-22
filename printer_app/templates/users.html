@@ -46,7 +46,19 @@
         <tr style="border-bottom: 1px solid #eee;">
           <td style="padding: 1rem;">{{ u.username }}</td>
           <td style="padding: 1rem;">{{ u.name or '' }}</td>
-          <td style="padding: 1rem;">{{ u.role }}</td>
+          <td style="padding: 1rem;">
+              {% if u.username == 'wattoo' %}
+                {{ u.role }}
+              {% else %}
+                <form method="post" action="{{ url_for('edit_user_role', user_id=u.id) }}" style="display:inline-flex; gap:.4rem; align-items:center;">
+                  <select name="role" style="padding:.3rem; border:1px solid #ddd; border-radius:4px;">
+                    <option value="user" {% if u.role == 'user' %}selected{% endif %}>User</option>
+                    <option value="admin" {% if u.role == 'admin' %}selected{% endif %}>Admin</option>
+                  </select>
+                  <button type="submit" style="background:#0f3460; color:#fff; border:none; padding:.3rem .6rem; border-radius:4px; cursor:pointer;">Update</button>
+                </form>
+              {% endif %}
+          </td>
           <td style="padding: 1rem;">
               {% if u.username == 'wattoo' %}
                 <span style="color: #6b7280; font-style: italic;">System User</span>
