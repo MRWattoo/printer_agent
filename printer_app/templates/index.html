@@ -77,7 +77,7 @@
             {% if role == 'admin' %}data-edit-url="{{ url_for('edit_printer', printer_id=p.id) }}"{% endif %}>
           <td>{{ p.id }}</td>
           <td><strong>{{ p.name }}</strong></td>
-          <td><code>{{ p.ip }}</code></td>
+          <td><code>{{ p.ip }}</code><span id="route-{{ p.id }}"></span></td>
           <td>
             {% if not p.enabled %}
               <span class="badge badge-disabled">Disabled</span>
@@ -251,6 +251,13 @@
           else if (p.error_state) c = '<span class="badge badge-warn">On network</span>';
           else                    c = '<span class="badge badge-offline">Disconnected</span>';
           connectivityCell.innerHTML = c;
+        }
+
+        const routeEl = document.getElementById('route-' + p.id);
+        if (routeEl) {
+          routeEl.innerHTML = p.routed_to_secondary
+            ? ' <span class="badge badge-busy" title="Prints routed to the secondary printer">→ ' + p.active_ip + '</span>'
+            : '';
         }
 
         const reasonCell = document.getElementById('reason-' + p.id);

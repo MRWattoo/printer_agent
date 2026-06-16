@@ -23,6 +23,7 @@ from .print_agent import (
     query_printer_status,
     probe_printer,
     _parse_ip_port,
+    _active_target,
 )
 
 logging.basicConfig(
@@ -197,6 +198,9 @@ def init_db():
             ("language",   "ALTER TABLE printers ADD COLUMN language TEXT"),
             ("info_extra", "ALTER TABLE printers ADD COLUMN info_extra TEXT"),
             ("last_probe","ALTER TABLE printers ADD COLUMN last_probe DATETIME"),
+            ("secondary_ip",   "ALTER TABLE printers ADD COLUMN secondary_ip TEXT"),
+            ("secondary_port", "ALTER TABLE printers ADD COLUMN secondary_port INTEGER NOT NULL DEFAULT 9100"),
+            ("use_secondary",  "ALTER TABLE printers ADD COLUMN use_secondary INTEGER NOT NULL DEFAULT 0"),
         ]:
             try:
                 conn.execute(ddl)
@@ -593,12 +597,27 @@ def index():
                            statuses=statuses,
                            username=session.get('username'))
 
-def _form_port(data) -> int:
+def _form_port(data, key: str = "port") -> int:
     try:
-        p = int(data.get("port", "9100") or 9100)
+        p = int(data.get(key, "9100") or 9100)
         return p if 1 <= p <= 65535 else 9100
     except (TypeError, ValueError):
         return 9100
+
+
+def _form_secondary(data) -> tuple[int, str | None, int, str | None]:
+    """
+    Parse the secondary-printer fields from a submitted form.
+    Returns (use_secondary, secondary_ip, secondary_port, error).
+    `error` is a non-empty message when the input is invalid.
+    """
+    use_secondary = 1 if data.get("use_secondary") else 0
+    secondary_ip = (data.get("secondary_ip") or "").strip() or None
+    secondary_port = _form_port(data, "secondary_port")
+    error = None
+    if use_secondary and not secondary_ip:
+        error = "Secondary IP is required when routing to a secondary printer is enabled."
+    return use_secondary, secondary_ip, secondary_port, error
 
 
 def _persist_probe(printer_id: int, probe: dict):
@@ -658,6 +677,10 @@ def add_printer():
     if request.method == "POST":
         data = request.form
         port = _form_port(data)
+        use_secondary, secondary_ip, secondary_port, sec_error = _form_secondary(data)
+        if sec_error:
+            flash(sec_error, "error")
+            return render_template("form.html", printer=None, title="Add Printer")
         try:
             with get_db() as conn:
                 cur = conn.execute(
@@ -665,8 +688,9 @@ def add_printer():
                     INSERT INTO printers
                         (name, ip, port, enabled,
                          vendor, manufacturer, model, firmware, language,
-                         serial, hostname, mac, info_extra)
-                    VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                         serial, hostname, mac, info_extra,
+                         secondary_ip, secondary_port, use_secondary)
+                    VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         data["name"].strip(),
@@ -681,6 +705,9 @@ def add_printer():
                         data.get("hostname") or None,
                         data.get("mac") or None,
                         data.get("info_extra") or None,
+                        secondary_ip,
+                        secondary_port,
+                        use_secondary,
                     ),
                 )
                 conn.commit()
@@ -708,6 +735,10 @@ def edit_printer(printer_id: int):
     if request.method == "POST":
         data = request.form
         port = _form_port(data)
+        use_secondary, secondary_ip, secondary_port, sec_error = _form_secondary(data)
+        if sec_error:
+            flash(sec_error, "error")
+            return render_template("form.html", printer=printer, title="Edit Printer")
         try:
             with get_db() as conn:
                 conn.execute(
@@ -715,7 +746,8 @@ def edit_printer(printer_id: int):
                     UPDATE printers
                     SET name=?, ip=?, port=?, enabled=?,
                         vendor=?, manufacturer=?, model=?, firmware=?,
-                        language=?, serial=?, hostname=?, mac=?, info_extra=?
+                        language=?, serial=?, hostname=?, mac=?, info_extra=?,
+                        secondary_ip=?, secondary_port=?, use_secondary=?
                     WHERE id=?
                     """,
                     (
@@ -732,6 +764,9 @@ def edit_printer(printer_id: int):
                         data.get("hostname") or None,
                         data.get("mac") or None,
                         data.get("info_extra") or None,
+                        secondary_ip,
+                        secondary_port,
+                        use_secondary,
                         printer_id,
                     ),
                 )
@@ -793,9 +828,10 @@ def test_print(printer_id: int):
     if not printer:
         return jsonify({"error": "not found"}), 404
 
+    target_ip, target_port = _active_target(printer)
     try:
-        print_test(printer["ip"], port=printer.get("port"))
-        flash(f"Test print sent successfully to {printer['name']}", "success")
+        print_test(target_ip, port=target_port)
+        flash(f"Test print sent successfully to {printer['name']} ({target_ip})", "success")
         log_job(printer_id, printer["name"], "success")
     except PrinterNotReachableError as e:
         flash(f"Test print failed - printer not reachable: {e}", "error")
@@ -838,7 +874,11 @@ def api_status():
     for p in printers:
         ip = p["ip"]
         port = p["port"] if "port" in p.keys() and p["port"] else 9100
-        ip_clean, override_port = _parse_ip_port(ip, default_port=port)
+        # Live status follows the active print target so the dashboard reflects
+        # where prints actually go (the secondary when routing is enabled).
+        active_ip, active_port = _active_target(p)
+        routed_to_secondary = active_ip != ip
+        ip_clean, override_port = _parse_ip_port(active_ip, default_port=active_port)
 
         busy = False
         source = "cache"
@@ -873,6 +913,10 @@ def api_status():
             "name": p["name"],
             "ip": p["ip"],
             "port": port,
+            "secondary_ip": p["secondary_ip"] if "secondary_ip" in p.keys() else None,
+            "use_secondary": bool(p["use_secondary"]) if "use_secondary" in p.keys() else False,
+            "routed_to_secondary": routed_to_secondary,
+            "active_ip": active_ip,
             "enabled": bool(p["enabled"]),
             "running": agent_manager.is_alive(p["id"]),
             "connected":   is_conn,

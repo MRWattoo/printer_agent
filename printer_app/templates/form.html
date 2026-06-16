@@ -68,6 +68,27 @@
         </div>
       </div>
 
+      <div style="margin:0 0 1rem; display:flex; align-items:center; gap:.6rem;">
+        <input type="checkbox" id="use_secondary" name="use_secondary" value="1"
+               {{ 'checked' if printer and printer.use_secondary else '' }}>
+        <label for="use_secondary" style="margin:0;">Route prints to a secondary printer</label>
+      </div>
+
+      <div id="secondaryFields" class="row"
+           style="{{ '' if printer and printer.use_secondary else 'display:none;' }}">
+        <div class="field" style="flex:2;">
+          <label for="secondary_ip">Secondary Printer IP / Hostname</label>
+          <input type="text" id="secondary_ip" name="secondary_ip" placeholder="e.g. 192.168.0.102"
+                 value="{{ printer.secondary_ip if printer and printer.secondary_ip else '' }}">
+        </div>
+        <div class="field">
+          <label for="secondary_port">Port</label>
+          <input type="number" id="secondary_port" name="secondary_port" min="1" max="65535"
+                 placeholder="9100"
+                 value="{{ printer.secondary_port if printer and printer.secondary_port else 9100 }}">
+        </div>
+      </div>
+
       <div style="margin-bottom:1rem; display:flex; align-items:center; gap:.6rem; flex-wrap:wrap;">
         <button type="button" id="probeBtn" class="probe-btn">🔄 Check Connection</button>
         <span id="probeSpinner" style="display:none; color:#6b7280;">Checking…</span>
@@ -254,4 +275,13 @@
     typingTimer = setTimeout(maybeAutoProbe, 900);
   });
   portField.addEventListener('change', () => runProbe(true));
+
+  // Show/hide the secondary printer fields based on the checkbox.
+  const useSecondary    = document.getElementById('use_secondary');
+  const secondaryFields = document.getElementById('secondaryFields');
+  function syncSecondaryVisibility() {
+    secondaryFields.style.display = useSecondary.checked ? 'flex' : 'none';
+  }
+  useSecondary.addEventListener('change', syncSecondaryVisibility);
+  syncSecondaryVisibility();
 {% endblock %}

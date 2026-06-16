@@ -147,6 +147,23 @@ def _parse_ip_port(ip_str: str, default_port: int = 9100) -> tuple[str, int]:
     return ip_str, default_port
 
 
+def _active_target(printer: dict) -> tuple[str, int]:
+    """
+    Resolve the active print target for a printer.
+
+    When the secondary printer is enabled (use_secondary) and a secondary IP is
+    configured, all prints route to the secondary target. Otherwise they go to
+    the primary IP. If use_secondary is on but no secondary IP is set, we fall
+    back to the primary so a job is never silently dropped.
+
+    Job *fetching* from Odoo always uses the primary IP — this helper is only
+    for choosing where the rendered receipt is sent.
+    """
+    if printer.get("use_secondary") and printer.get("secondary_ip"):
+        return printer["secondary_ip"], printer.get("secondary_port") or 9100
+    return printer["ip"], printer.get("port") or 9100
+
+
 def _validate_host(ip: str) -> tuple[bool, str]:
     parts = ip.split('.')
     if len(parts) == 4 and all(p.isdigit() for p in parts):
@@ -889,6 +906,9 @@ def poll_printer(printer: dict, settings: dict, stop_event: threading.Event):
     name = printer["name"]
     ip = printer["ip"]
     printer_port = printer.get("port") if isinstance(printer, dict) else None
+    # Where prints (and status checks) actually go. May be the secondary target
+    # when use_secondary is enabled. Job fetching always uses the primary `ip`.
+    target_ip, target_port = _active_target(printer)
     odoo_url = settings["odoo_url"].rstrip("/")
     headers = {"Authorization": f"Bearer {settings['api_key']}"}
     company_id = settings["company_id"]
@@ -925,7 +945,7 @@ def poll_printer(printer: dict, settings: dict, stop_event: threading.Event):
             is_busy = cached["busy"] if cached else False
             if not is_busy:
                 try:
-                    st = query_printer_status(ip, printer_port or 9100)
+                    st = query_printer_status(target_ip, target_port)
                     agent_manager.set_status(printer["id"], st, busy=False)
                 except Exception as e:
                     logger.debug("[%s] status refresh failed: %s", name, e)
@@ -962,7 +982,7 @@ def poll_printer(printer: dict, settings: dict, stop_event: threading.Event):
 
                     agent_manager.mark_busy(printer["id"], True)
                     try:
-                        print_receipt(ip, job["data"], port=printer_port)
+                        print_receipt(target_ip, job["data"], port=target_port)
                         confirmed = confirm_job(odoo_url, headers, job_id)
                         if confirmed:
                             logger.info("[%s] Job %s printed and confirmed", name, job_id)
