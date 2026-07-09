@@ -6,3 +6,4 @@ printers.db
 .vscode/
 .env
 .DS_Store
+.codebuddy

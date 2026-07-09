@@ -925,8 +925,13 @@ def poll_printer(printer: dict, settings: dict, stop_event: threading.Event):
                        "status-only mode (no job polling).", name)
 
     # Status refresh interval (continuous) vs Odoo job-poll interval.
+    # JOB_INTERVAL was 5s — every new job sat for up to 5s (avg 2.5s) before
+    # this thread even noticed it, on top of render+network time on the Odoo
+    # side. Each printer already has its own thread, so lowering this does
+    # NOT create cross-printer contention — it only tightens how quickly THIS
+    # printer notices ITS OWN new jobs.
     STATUS_INTERVAL = 5
-    JOB_INTERVAL    = 5
+    JOB_INTERVAL    = 1
 
     last_status_ts = 0.0
     last_job_ts    = 0.0
@@ -976,32 +981,53 @@ def poll_printer(printer: dict, settings: dict, stop_event: threading.Event):
             if response.status_code == 200:
                 result = response.json().get("result", [])
                 if result:
-                    job = result[0]
-                    job_id = job["id"]
-                    logger.info("[%s] Attempting job %s", name, job_id)
-
+                    # Drain the WHOLE batch this fetch returned (previously only
+                    # result[0] was processed — any backlog beyond the first job
+                    # sat unprocessed for another full JOB_INTERVAL per extra job,
+                    # even though the fetch already had them in hand). A single
+                    # physical printer can only print one job at a time anyway,
+                    # so this loop stays sequential — that's correct, not a
+                    # bottleneck; the fix is not leaving already-fetched jobs on
+                    # the table.
                     agent_manager.mark_busy(printer["id"], True)
                     try:
-                        print_receipt(target_ip, job["data"], port=target_port)
-                        confirmed = confirm_job(odoo_url, headers, job_id)
-                        if confirmed:
-                            logger.info("[%s] Job %s printed and confirmed", name, job_id)
-                            log_job_internal(printer["id"], name, "success")
-                        else:
-                            logger.warning("[%s] Job %s printed but confirmation failed", name, job_id)
-                            log_job_internal(printer["id"], name, "failed", "Confirmation failed")
+                        for job in result:
+                            job_id = job["id"]
+                            logger.info("[%s] Attempting job %s", name, job_id)
+                            try:
+                                print_receipt(target_ip, job["data"], port=target_port)
+                                confirmed = confirm_job(odoo_url, headers, job_id)
+                                if confirmed:
+                                    logger.info("[%s] Job %s printed and confirmed", name, job_id)
+                                    log_job_internal(printer["id"], name, "success")
+                                else:
+                                    logger.warning("[%s] Job %s printed but confirmation failed", name, job_id)
+                                    log_job_internal(printer["id"], name, "failed", "Confirmation failed")
 
-                    except PrinterNotReachableError as e:
-                        logger.error("[%s] Job %s NOT confirmed — printer unreachable: %s", name, job_id, e)
-                        log_job_internal(printer["id"], name, "failed", "Printer unreachable")
-                    except PrinterHardwareError as e:
-                        logger.error("[%s] Job %s NOT confirmed — printer hardware error: %s", name, job_id, e)
-                        log_job_internal(printer["id"], name, "failed", str(e))
-                    except Exception as e:
-                        logger.error("[%s] Job %s NOT confirmed — unexpected print error: %s", name, job_id, e)
-                        log_job_internal(printer["id"], name, "failed", str(e))
+                            except PrinterNotReachableError as e:
+                                logger.error("[%s] Job %s NOT confirmed — printer unreachable: %s", name, job_id, e)
+                                log_job_internal(printer["id"], name, "failed", "Printer unreachable")
+                                # Printer is down — further jobs in this batch would
+                                # fail identically; stop and retry the whole batch
+                                # (still pending server-side) on the next poll.
+                                break
+                            except PrinterHardwareError as e:
+                                logger.error("[%s] Job %s NOT confirmed — printer hardware error: %s", name, job_id, e)
+                                log_job_internal(printer["id"], name, "failed", str(e))
+                                break
+                            except Exception as e:
+                                logger.error("[%s] Job %s NOT confirmed — unexpected print error: %s", name, job_id, e)
+                                log_job_internal(printer["id"], name, "failed", str(e))
                     finally:
                         agent_manager.mark_busy(printer["id"], False)
+
+                    # The fetch is capped (limit=20 server-side, see
+                    # controllers/main.py fetch_jobs) — if it came back full,
+                    # more jobs may still be queued. Re-poll immediately instead
+                    # of waiting out the rest of JOB_INTERVAL, so a backlog
+                    # drains at full speed rather than 1 batch per tick.
+                    if len(result) >= 20:
+                        last_job_ts = 0.0
             else:
                 logger.warning("[%s] HTTP %s from source", name, response.status_code)
 
