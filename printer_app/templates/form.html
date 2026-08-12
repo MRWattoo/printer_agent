@@ -66,6 +66,15 @@
                  placeholder="9100"
                  value="{{ printer.port if printer and printer.port else 9100 }}">
         </div>
+        <div class="field">
+          <label for="head_dots">Head width (dots)</label>
+          <input type="number" id="head_dots" name="head_dots" min="128" max="2048"
+                 placeholder="leave blank = print 1:1"
+                 value="{{ printer.head_dots if printer and printer.head_dots else '' }}">
+          <small>Printable dots of the print head: 576 = 72&nbsp;mm (most 80&nbsp;mm),
+                 512 = 64&nbsp;mm, 384 = 48&nbsp;mm (58&nbsp;mm). Receipts are scaled to
+                 this width so they fill the roll. Blank prints the bitmap unscaled.</small>
+        </div>
       </div>
 
       <div style="margin:0 0 1rem; display:flex; align-items:center; gap:.6rem;">

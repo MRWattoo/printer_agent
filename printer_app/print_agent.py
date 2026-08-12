@@ -63,6 +63,26 @@ class PrinterHardwareError(IOError):
 # Image helpers
 # ---------------------------------------------------------------------------
 
+def _fit_to_head(im: Image.Image, head_dots: int | None) -> Image.Image:
+    """Scale a receipt bitmap to the print head's printable dot width.
+
+    Printing is 1:1 — one image pixel per printer dot — so a bitmap narrower
+    than the head leaves unprinted paper down the right edge, and one wider than
+    the head is clipped on the right. The POS renders every receipt at one fixed
+    width and cannot know which head a job will land on, so the width is
+    normalised here, where the target printer is known.
+
+    Common printable widths at 203 dpi: 576 dots = 72 mm (most 80 mm printers),
+    512 dots = 64 mm (some 80 mm printers), 384 dots = 48 mm (58 mm printers).
+
+    head_dots None or 0 leaves the bitmap untouched.
+    """
+    if not head_dots or im.width == head_dots:
+        return im
+    height = max(1, round(im.height * head_dots / im.width))
+    return im.resize((head_dots, height), Image.LANCZOS)
+
+
 def imgcrop(im: Image.Image):
     """Slice a tall receipt image into chunks so ESC/POS can handle it."""
     ret = []
@@ -760,7 +780,12 @@ def print_test(printer_ip: str, port: int | None = None) -> None:
     print_receipt(printer_ip, test_img_data, port=port)
 
 
-def print_receipt(printer_ip: str, img_data: str, port: int | None = None) -> None:
+def print_receipt(
+    printer_ip: str,
+    img_data: str,
+    port: int | None = None,
+    head_dots: int | None = None,
+) -> None:
     """
     Decode base64 image and send to ESC/POS network printer.
 
@@ -781,7 +806,12 @@ def print_receipt(printer_ip: str, img_data: str, port: int | None = None) -> No
     ip, parsed_port = _parse_ip_port(printer_ip)
     if port is None:
         port = parsed_port
-    imgs = imgcrop(Image.open(BytesIO(base64.b64decode(img_data))))
+    src = Image.open(BytesIO(base64.b64decode(img_data)))
+    logger.info(
+        "[%s] Receipt bitmap %sx%s -> head %s dots",
+        printer_ip, src.width, src.height, head_dots or "unset (1:1)",
+    )
+    imgs = imgcrop(_fit_to_head(src, head_dots))
 
     # --- connect ---------------------------------------------------------
     try:
@@ -995,7 +1025,12 @@ def poll_printer(printer: dict, settings: dict, stop_event: threading.Event):
                             job_id = job["id"]
                             logger.info("[%s] Attempting job %s", name, job_id)
                             try:
-                                print_receipt(target_ip, job["data"], port=target_port)
+                                print_receipt(
+                                    target_ip,
+                                    job["data"],
+                                    port=target_port,
+                                    head_dots=printer.get("head_dots"),
+                                )
                                 confirmed = confirm_job(odoo_url, headers, job_id)
                                 if confirmed:
                                     logger.info("[%s] Job %s printed and confirmed", name, job_id)

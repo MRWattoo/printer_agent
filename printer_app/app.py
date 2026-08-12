@@ -201,6 +201,9 @@ def init_db():
             ("secondary_ip",   "ALTER TABLE printers ADD COLUMN secondary_ip TEXT"),
             ("secondary_port", "ALTER TABLE printers ADD COLUMN secondary_port INTEGER NOT NULL DEFAULT 9100"),
             ("use_secondary",  "ALTER TABLE printers ADD COLUMN use_secondary INTEGER NOT NULL DEFAULT 0"),
+            # Printable dot width of the head. NULL = print the bitmap 1:1
+            # (previous behaviour); set it to scale every receipt to the head.
+            ("head_dots",      "ALTER TABLE printers ADD COLUMN head_dots INTEGER"),
         ]:
             try:
                 conn.execute(ddl)
@@ -605,6 +608,18 @@ def _form_port(data, key: str = "port") -> int:
         return 9100
 
 
+def _form_head_dots(data) -> int | None:
+    """Parse the head width (printable dots). Blank/invalid → None = print 1:1."""
+    raw = (data.get("head_dots") or "").strip()
+    if not raw:
+        return None
+    try:
+        dots = int(raw)
+    except (TypeError, ValueError):
+        return None
+    return dots if 128 <= dots <= 2048 else None
+
+
 def _form_secondary(data) -> tuple[int, str | None, int, str | None]:
     """
     Parse the secondary-printer fields from a submitted form.
@@ -689,8 +704,8 @@ def add_printer():
                         (name, ip, port, enabled,
                          vendor, manufacturer, model, firmware, language,
                          serial, hostname, mac, info_extra,
-                         secondary_ip, secondary_port, use_secondary)
-                    VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                         secondary_ip, secondary_port, use_secondary, head_dots)
+                    VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         data["name"].strip(),
@@ -708,6 +723,7 @@ def add_printer():
                         secondary_ip,
                         secondary_port,
                         use_secondary,
+                        _form_head_dots(data),
                     ),
                 )
                 conn.commit()
@@ -747,7 +763,8 @@ def edit_printer(printer_id: int):
                     SET name=?, ip=?, port=?, enabled=?,
                         vendor=?, manufacturer=?, model=?, firmware=?,
                         language=?, serial=?, hostname=?, mac=?, info_extra=?,
-                        secondary_ip=?, secondary_port=?, use_secondary=?
+                        secondary_ip=?, secondary_port=?, use_secondary=?,
+                        head_dots=?
                     WHERE id=?
                     """,
                     (
@@ -767,6 +784,7 @@ def edit_printer(printer_id: int):
                         secondary_ip,
                         secondary_port,
                         use_secondary,
+                        _form_head_dots(data),
                         printer_id,
                     ),
                 )
