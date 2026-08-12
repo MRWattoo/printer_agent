@@ -107,6 +107,24 @@ def get_db():
     return conn
 
 
+def _ip_is_unique(conn) -> bool:
+    """True when `printers.ip` is backed by a UNIQUE index.
+
+    This used to be read off `PRAGMA table_info`'s 6th field, but that field is
+    `pk` (primary-key position), NOT a uniqueness flag. `ip` is UNIQUE while
+    `id` is the primary key, so the check was always False — which made the
+    table rebuild below run on EVERY startup and drop every column it does not
+    copy (port, probe results, secondary target, head width).
+    """
+    for _seq, name, is_unique, *_rest in conn.execute("PRAGMA index_list(printers)").fetchall():
+        if not is_unique:
+            continue
+        cols = [r[2] for r in conn.execute(f'PRAGMA index_info("{name}")').fetchall()]
+        if cols == ["ip"]:
+            return True
+    return False
+
+
 def init_db():
     with get_db() as conn:
         # 1. Settings table (Global configuration)
@@ -134,13 +152,14 @@ def init_db():
         # Check if columns still exist in printers table
         cursor = conn.execute("PRAGMA table_info(printers)")
         columns_info = cursor.fetchall()
-        
+        rebuilt_from_old = False
+
         # Only proceed with migration if the table actually exists
         if columns_info:
             columns = [row[1] for row in columns_info]
             
             # Check if 'ip' is already unique
-            is_ip_unique = any(row[1] == 'ip' and row[5] == 1 for row in columns_info) 
+            is_ip_unique = _ip_is_unique(conn)
             
             if "odoo_url" in columns or not is_ip_unique:
                 # Migration step: Move values from first printer to global settings if settings are empty
@@ -171,7 +190,11 @@ def init_db():
                 )
                 # Use INSERT OR IGNORE to handle existing duplicates during migration
                 conn.execute("INSERT OR IGNORE INTO printers (id, name, ip, enabled) SELECT id, name, ip, enabled FROM printers_old")
-                conn.execute("DROP TABLE printers_old")
+                # printers_old is deliberately NOT dropped here — the ADD COLUMN
+                # loop below recreates the remaining columns, and only then can
+                # their values be copied back. Dropping it now is what silently
+                # reset port / probe results / secondary target on every restart.
+                rebuilt_from_old = True
         else:
             # Table doesn't exist at all, just create it
             conn.execute(
@@ -209,6 +232,22 @@ def init_db():
                 conn.execute(ddl)
             except sqlite3.OperationalError:
                 pass
+
+        # Carry every surviving column across from the pre-rebuild table, then
+        # retire it. Without this the rebuild above keeps only id/name/ip/enabled.
+        if rebuilt_from_old:
+            old_cols = {r[1] for r in conn.execute("PRAGMA table_info(printers_old)")}
+            new_cols = [r[1] for r in conn.execute("PRAGMA table_info(printers)")]
+            carry = [c for c in new_cols
+                     if c in old_cols and c not in ("id", "name", "ip", "enabled")]
+            if carry:
+                assignments = ", ".join(f"{c}=(SELECT o.{c} FROM printers_old o WHERE o.id=printers.id)"
+                                        for c in carry)
+                conn.execute(
+                    f"UPDATE printers SET {assignments} "
+                    "WHERE id IN (SELECT id FROM printers_old)"
+                )
+            conn.execute("DROP TABLE printers_old")
 
         conn.execute(
             """

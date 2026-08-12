@@ -39,6 +39,11 @@ from PIL import Image, ImageDraw, ImageFont
 
 try:
     from escpos.printer import Network
+    try:
+        from escpos.exceptions import DeviceNotFoundError
+    except ImportError:            # older python-escpos without this exception
+        class DeviceNotFoundError(Exception):
+            pass
     ESCPOS_AVAILABLE = True
 except ImportError:
     ESCPOS_AVAILABLE = False
@@ -828,6 +833,21 @@ def print_receipt(
             "Ensure the printer is powered on and reachable from this server."
         ) from exc
 
+    # Open the socket NOW rather than letting escpos open it lazily on first
+    # write. Its `device` property sets the handle to None *before* calling
+    # open() (escpos.py:143-147), so a failed connect leaves the printer in a
+    # state where the next write dies on a bare `assert self.device` — an
+    # AssertionError with no message, which surfaced in the UI as
+    # "Test print failed - unexpected error:" with nothing after the colon.
+    try:
+        printer.open()
+    except (DeviceNotFoundError, socket.timeout, socket.error, OSError) as exc:
+        raise PrinterNotReachableError(
+            f"Cannot open connection to printer {ip} on port {port}: {exc or type(exc).__name__}. "
+            "The printer may be out of paper, its cover open, or its print queue paused "
+            "(many models refuse port 9100 in those states)."
+        ) from exc
+
 
     # --- pre-print status checks (Best Effort) ---------------------------
     try:
@@ -880,10 +900,13 @@ def print_receipt(
         printer._raw(b'\n\n\n')
         # Ensure all data is sent before cutting
         printer.cut(mode='full')
-    except (socket.timeout, socket.error, OSError) as exc:
-        # Network disappeared mid-print
+    except (socket.timeout, socket.error, OSError, DeviceNotFoundError, AssertionError) as exc:
+        # Network disappeared mid-print. AssertionError is included because
+        # escpos guards every write with a bare `assert self.device`, which
+        # carries no message — reporting it verbatim tells the operator nothing.
         raise PrinterNotReachableError(
-            f"Lost connection to printer {printer_ip} during print: {exc}"
+            f"Lost connection to printer {printer_ip} during print: "
+            f"{exc or type(exc).__name__}"
         ) from exc
     # Removing the catch-all 'except Exception' block that was causing 
     # false-positive PrinterHardwareErrors on successful prints.
