@@ -80,7 +80,13 @@ def _fit_to_head(im: Image.Image, head_dots: int | None) -> Image.Image:
     if not head_dots or im.width == head_dots:
         return im
     height = max(1, round(im.height * head_dots / im.width))
-    return im.resize((head_dots, height), Image.LANCZOS)
+    # Resample in greyscale, then hard-threshold to pure black/white.
+    # Handing the resampled image straight to the printer would let PIL apply
+    # Floyd-Steinberg dithering in escpos's `convert("1")` (escpos/image.py:49)
+    # to the grey edges resampling leaves behind — which prints as speckled,
+    # blurry text. Thresholding first leaves the dither nothing to act on.
+    resized = im.convert("L").resize((head_dots, height), Image.LANCZOS)
+    return resized.point(lambda v: 255 if v >= 128 else 0).convert("1")
 
 
 def imgcrop(im: Image.Image):
