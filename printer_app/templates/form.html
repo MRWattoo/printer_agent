@@ -108,14 +108,14 @@
         <h3>Detected Information <span style="font-weight:400; text-transform:none; color:#6b7280; font-size:.72rem;">(read-only — populated by Probe)</span></h3>
         <div id="probeStatus"></div>
         <div class="info-grid">
-          <div class="k">Manufacturer</div><div class="v"><input type="text" name="manufacturer" id="f_manufacturer" readonly value="{{ printer.manufacturer if printer and printer.manufacturer else (printer.vendor if printer else '') }}"></div>
-          <div class="k">Model</div>       <div class="v"><input type="text" name="model"    id="f_model"    readonly value="{{ printer.model if printer else '' }}"></div>
-          <div class="k">Firmware</div>    <div class="v"><input type="text" name="firmware" id="f_firmware" readonly value="{{ printer.firmware if printer else '' }}"></div>
-          <div class="k">Device code</div> <div class="v"><input type="text" name="serial"   id="f_serial"   readonly value="{{ printer.serial if printer else '' }}"></div>
-          <div class="k">Language</div>    <div class="v"><input type="text" name="language" id="f_language" readonly value="{{ printer.language if printer else '' }}"></div>
-          <div class="k">Hostname</div>    <div class="v"><input type="text" name="hostname" id="f_hostname" readonly value="{{ printer.hostname if printer else '' }}"></div>
-          <div class="k">MAC Address</div> <div class="v"><input type="text" name="mac"      id="f_mac"      readonly value="{{ printer.mac if printer else '' }}"></div>
-          <input type="hidden" name="vendor" id="f_vendor" value="{{ printer.vendor if printer else '' }}">
+          <div class="k">Manufacturer</div><div class="v"><input type="text" name="manufacturer" id="f_manufacturer" readonly value="{{ printer.manufacturer or printer.vendor or '' if printer else '' }}"></div>
+          <div class="k">Model</div>       <div class="v"><input type="text" name="model"    id="f_model"    readonly value="{{ printer.model or '' if printer else '' }}"></div>
+          <div class="k">Firmware</div>    <div class="v"><input type="text" name="firmware" id="f_firmware" readonly value="{{ printer.firmware or '' if printer else '' }}"></div>
+          <div class="k">Device code</div> <div class="v"><input type="text" name="serial"   id="f_serial"   readonly value="{{ printer.serial or '' if printer else '' }}"></div>
+          <div class="k">Language</div>    <div class="v"><input type="text" name="language" id="f_language" readonly value="{{ printer.language or '' if printer else '' }}"></div>
+          <div class="k">Hostname</div>    <div class="v"><input type="text" name="hostname" id="f_hostname" readonly value="{{ printer.hostname or '' if printer else '' }}"></div>
+          <div class="k">MAC Address</div> <div class="v"><input type="text" name="mac"      id="f_mac"      readonly value="{{ printer.mac or '' if printer else '' }}"></div>
+          <input type="hidden" name="vendor" id="f_vendor" value="{{ printer.vendor or '' if printer else '' }}">
         </div>
         <div id="openPortsBox" style="margin-top:.9rem; display:none;">
           <div class="k" style="font-size:.78rem; margin-bottom:.3rem;">Open Ports Detected (click to use):</div>
@@ -123,7 +123,7 @@
         </div>
         <div class="field" style="margin-top:.8rem;">
           <label for="info_extra">Extra Info (model ID / type ID / ROM / Web banner)</label>
-          <input type="text" name="info_extra" id="f_info_extra" readonly value="{{ printer.info_extra if printer else '' }}">
+          <input type="text" name="info_extra" id="f_info_extra" readonly value="{{ printer.info_extra or '' if printer else '' }}">
         </div>
         {% if printer and printer.last_probe %}
           <div class="muted" style="margin-top:.4rem; font-size:.78rem;">Last probed: {{ printer.last_probe }}</div>

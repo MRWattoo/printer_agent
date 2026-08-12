@@ -5,6 +5,7 @@ print_agent.py
 import base64
 import datetime
 import logging
+import os
 import socket
 import threading
 import time
@@ -50,6 +51,12 @@ except ImportError:
     logging.warning("python-escpos not installed — printing will be simulated only.")
 
 logger = logging.getLogger(__name__)
+
+# Socket timeout for a print job, in seconds. This bounds the whole print, not
+# just the connect: the receipt is larger than the printer's input buffer, so the
+# printer throttles us and our writes block until it has physically printed.
+# Generous on purpose — a stalled write aborts the job mid-receipt.
+PRINT_SOCKET_TIMEOUT = int(os.environ.get("PRINTER_APP_PRINT_TIMEOUT", "120"))
 
 
 # ---------------------------------------------------------------------------
@@ -791,6 +798,37 @@ def print_test(printer_ip: str, port: int | None = None) -> None:
     print_receipt(printer_ip, test_img_data, port=port)
 
 
+def _close_cleanly(printer, printer_ip: str) -> None:
+    """Close a printer connection without truncating the job.
+
+    escpos's close() calls shutdown(SHUT_RDWR) then close(). If the receive queue
+    still holds unread bytes — and it does, because the pre-print status queries
+    leave replies behind — the kernel answers with RST instead of FIN, and an RST
+    DISCARDS whatever is still sitting in our send buffer. On a long receipt that
+    is the tail of the print, so the paper stops partway with no error raised.
+    Draining the inbound bytes first lets the connection close with a FIN and the
+    queued raster reach the printer.
+    """
+    try:
+        dev = getattr(printer, "_device", None)
+        if dev:
+            dev.settimeout(0.2)
+            for _ in range(64):                 # bounded: never spin forever
+                try:
+                    if not dev.recv(4096):
+                        break
+                except (socket.timeout, TimeoutError, BlockingIOError):
+                    break
+                except OSError:
+                    break
+    except Exception as exc:
+        logger.debug("[%s] Drain before close failed (%s) — closing anyway", printer_ip, exc)
+    try:
+        printer.close()
+    except Exception:
+        pass
+
+
 def print_receipt(
     printer_ip: str,
     img_data: str,
@@ -822,11 +860,20 @@ def print_receipt(
         "[%s] Receipt bitmap %sx%s -> head %s dots",
         printer_ip, src.width, src.height, head_dots or "unset (1:1)",
     )
-    imgs = imgcrop(_fit_to_head(src, head_dots))
+    # No manual slicing: python-escpos already splits tall images at
+    # fragment_height=960 (escpos.py:237-247). imgcrop()'s ~20-px bands turned a
+    # full receipt into 180+ separate GS v 0 commands, each with its own header
+    # and its own chance for the printer to insert line spacing between bands.
+    img = _fit_to_head(src, head_dots)
 
     # --- connect ---------------------------------------------------------
     try:
-        printer = Network(ip, port=port, timeout=10)
+        # A full-length receipt is ~250 KB of raster, far more than a thermal
+        # printer's 4-64 KB input buffer, so the printer applies TCP backpressure
+        # and sendall() blocks for most of the physical print. That makes this
+        # timeout a ceiling on total PRINT time, not just connect time — at 10 s
+        # a long receipt stopped halfway through with a socket.timeout.
+        printer = Network(ip, port=port, timeout=PRINT_SOCKET_TIMEOUT)
     except (socket.timeout, socket.error, OSError) as exc:
         raise PrinterNotReachableError(
             f"Cannot connect to printer {ip} on port {port}: {exc}. "
@@ -881,10 +928,7 @@ def print_receipt(
 
     except PrinterHardwareError:
         # Re-raise explicit hardware errors (like paper out)
-        try:
-            printer.close()
-        except:
-            pass
+        _close_cleanly(printer, printer_ip)
         raise
     except Exception as exc:
         logger.warning(
@@ -894,8 +938,7 @@ def print_receipt(
 
     # --- send data -------------------------------------------------------
     try:
-        for img in imgs:
-            printer.image(img)
+        printer.image(img)
         # Add feed lines before cut to ensure clean cutting
         printer._raw(b'\n\n\n')
         # Ensure all data is sent before cutting
@@ -911,10 +954,7 @@ def print_receipt(
     # Removing the catch-all 'except Exception' block that was causing 
     # false-positive PrinterHardwareErrors on successful prints.
     finally:
-        try:
-            printer.close()
-        except Exception:
-            pass
+        _close_cleanly(printer, printer_ip)
 
 
 

@@ -647,6 +647,19 @@ def _form_port(data, key: str = "port") -> int:
         return 9100
 
 
+def _clean_text(value) -> str | None:
+    """Normalise a submitted probe field to a real value or None.
+
+    The probe fields are readonly inputs but are still posted back with the
+    form. A NULL used to render as the literal string "None" in the input, and
+    `data.get(...) or None` treats "None" as a real value — so saving the form
+    wrote the text "None" into the database. Reject those spellings here as well
+    as in the template, and clean up rows already carrying them.
+    """
+    text = (value or "").strip()
+    return None if text.lower() in ("", "none", "null", "undefined") else text
+
+
 def _form_head_dots(data) -> int | None:
     """Parse the head width (printable dots). Blank/invalid → None = print 1:1."""
     raw = (data.get("head_dots") or "").strip()
@@ -750,15 +763,15 @@ def add_printer():
                         data["name"].strip(),
                         data["ip"].strip(),
                         port,
-                        data.get("vendor") or data.get("manufacturer") or None,
-                        data.get("manufacturer") or None,
-                        data.get("model") or None,
-                        data.get("firmware") or None,
-                        data.get("language") or None,
-                        data.get("serial") or None,
-                        data.get("hostname") or None,
-                        data.get("mac") or None,
-                        data.get("info_extra") or None,
+                        _clean_text(data.get("vendor")) or _clean_text(data.get("manufacturer")),
+                        _clean_text(data.get("manufacturer")),
+                        _clean_text(data.get("model")),
+                        _clean_text(data.get("firmware")),
+                        _clean_text(data.get("language")),
+                        _clean_text(data.get("serial")),
+                        _clean_text(data.get("hostname")),
+                        _clean_text(data.get("mac")),
+                        _clean_text(data.get("info_extra")),
                         secondary_ip,
                         secondary_port,
                         use_secondary,
@@ -811,15 +824,15 @@ def edit_printer(printer_id: int):
                         data["ip"].strip(),
                         port,
                         int(data.get("enabled", 1)),
-                        data.get("vendor") or data.get("manufacturer") or None,
-                        data.get("manufacturer") or None,
-                        data.get("model") or None,
-                        data.get("firmware") or None,
-                        data.get("language") or None,
-                        data.get("serial") or None,
-                        data.get("hostname") or None,
-                        data.get("mac") or None,
-                        data.get("info_extra") or None,
+                        _clean_text(data.get("vendor")) or _clean_text(data.get("manufacturer")),
+                        _clean_text(data.get("manufacturer")),
+                        _clean_text(data.get("model")),
+                        _clean_text(data.get("firmware")),
+                        _clean_text(data.get("language")),
+                        _clean_text(data.get("serial")),
+                        _clean_text(data.get("hostname")),
+                        _clean_text(data.get("mac")),
+                        _clean_text(data.get("info_extra")),
                         secondary_ip,
                         secondary_port,
                         use_secondary,
